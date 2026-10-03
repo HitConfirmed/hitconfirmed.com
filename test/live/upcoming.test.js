@@ -155,6 +155,20 @@ test('excludes a manually-tracked stub whose seeded date is well past the 14-day
   assert.deepEqual(result, []);
 });
 
+test('excludes a legacy future-dated stub with no game roster (the empty duplicate "Evo France 2026" pill)', async () => {
+  // Real production case: "Evo France 2026" (startgg_id NULL, future date,
+  // zero tournament_games) sat beside the real start.gg-synced "EVO FRANCE
+  // 2026" and surfaced as a second pill whose expanded body was blank,
+  // since WaitingRoom renders nothing without a game roster.
+  await addGame(10, 'Street Fighter 6');
+  await addTournament(1, 'Evo France 2026', '2099-10-09', { isLive: 0, startggId: null });
+  await addTournament(2, 'EVO FRANCE 2026', '2099-10-09', { isLive: 0, startggId: 'sg-evofr' });
+  await db.runAsync('INSERT INTO tournament_games (tournament_id, game_id, num_entrants) VALUES (2, 10, 500)');
+
+  const result = await lm.getUpcoming();
+  assert.deepEqual(result.map((r) => r.tournament.id), [2], 'only the real, game-bearing row shows');
+});
+
 test('includes a manually-tracked event seeded ahead of time (future date, no bracket_history yet)', async () => {
   // Mirrors auto-sync-manual-events.js's seedUpcomingTournament: a
   // not-yet-started EWC main-stage event gets a bare tournaments row

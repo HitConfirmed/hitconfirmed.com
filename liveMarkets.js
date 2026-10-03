@@ -823,9 +823,16 @@ async function getUpcoming() {
        -- real multi-day major without leaving a truly abandoned/never-
        -- updated stub visible indefinitely. Once real data lands, ingestion
        -- writes bracket_history and this bridge stops mattering.
+       -- Must also have a tournament_games row: seedUpcomingTournament
+       -- always writes one, so it's what separates a genuinely seeded
+       -- event from a legacy empty stub. Without it, an old duplicate row
+       -- with a future date and no games (e.g. "Evo France 2026" next to
+       -- the real start.gg-synced "EVO FRANCE 2026") surfaced as a second,
+       -- empty pill - its expanded body renders nothing without a roster.
        OR (startgg_id IS NULL
            AND is_live = 0
            AND NOT EXISTS (SELECT 1 FROM bracket_history bh3 WHERE bh3.tournament_id = t.id)
+           AND EXISTS (SELECT 1 FROM tournament_games tg3 WHERE tg3.tournament_id = t.id)
            AND date(date, '+14 days') >= date('now'))
      ORDER BY date(date) DESC`
   );
