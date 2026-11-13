@@ -816,6 +816,18 @@ async function reconcileOneStaleMarket(m, set) {
     console.log(`[reconcile-stale] settled market ${m.id} (set ${m.startgg_set_id}, "${m.round_text}")`);
     return 'settled';
   }
+  // Abandoned set: started (or opened) here but start.gg hasn't touched it in
+  // ABANDONED_SET_DAYS. Real case: Saltmine League Europe West Finals' Grand
+  // Final Reset sat "in progress" 1-1 on start.gg for 13 days because the TO
+  // never reported it, pinning the whole tournament in Happening Now. Void
+  // (refunds every pick) so the tournament can finish. Only open/closed
+  // markets - a 'pending' set was never started, and the poller's own
+  // STALE_PENDING_DAYS cutoff already stops it holding a tournament open.
+  if ((m.state === 'open' || m.state === 'closed') && isAbandonedSet(set)) {
+    await lm.voidMarket(m.id);
+    console.log(`[reconcile-stale] voided abandoned market ${m.id} (set ${m.startgg_set_id}, "${m.round_text}") - no start.gg update in ${ABANDONED_SET_DAYS}+ days`);
+    return 'voided';
+  }
   if (set.state === 2 && e0?.id && e1?.id) {
     await lm.closeMarket(m.id, p1s, p2s);
     return 'closed';
@@ -823,19 +835,25 @@ async function reconcileOneStaleMarket(m, set) {
   return 'skipped'; // still genuinely unresolved on start.gg's own side - nothing to do yet
 }
 
+const ABANDONED_SET_DAYS = 7;
+function isAbandonedSet(set, now = Date.now()) {
+  if (set.state === 3 || !set.updatedAt) return false; // completed, or no timestamp to judge by - never guess
+  return now - Number(set.updatedAt) * 1000 > ABANDONED_SET_DAYS * 24 * 60 * 60 * 1000;
+}
+
 async function reconcileStaleMarkets() {
   const stale = await db.allAsync(
-    `SELECT id, tournament_id, game_id, startgg_set_id, player1_id, player2_id, round_text, round_int, phase_group_id
+    `SELECT id, state, tournament_id, game_id, startgg_set_id, player1_id, player2_id, round_text, round_int, phase_group_id
      FROM set_markets
      WHERE state IN ('open','closed','pending')
        AND startgg_set_id GLOB '[0-9]*'` // excludes preview_*/manual-* synthetic ids
   );
-  const stats = { checked: stale.length, settled: 0, closed: 0, skipped: 0, errors: 0 };
+  const stats = { checked: stale.length, settled: 0, closed: 0, voided: 0, skipped: 0, errors: 0 };
   for (const m of stale) {
     try {
       const data = await startgg(
         `query { set(id: ${m.startgg_set_id}) {
-           state winnerId
+           state winnerId updatedAt
            slots { entrant { id name participants { images { type url } player { id } } } standing { stats { score { value } } } }
          } }`,
         {}
@@ -849,7 +867,7 @@ async function reconcileStaleMarkets() {
     await sleep(REQ_DELAY_MS);
   }
   if (stale.length) {
-    console.log(`[reconcile-stale] checked ${stats.checked}: ${stats.settled} settled, ${stats.closed} closed, ${stats.skipped} still unresolved, ${stats.errors} error(s)`);
+    console.log(`[reconcile-stale] checked ${stats.checked}: ${stats.settled} settled, ${stats.closed} closed, ${stats.voided} voided (abandoned), ${stats.skipped} still unresolved, ${stats.errors} error(s)`);
   }
   return stats;
 }

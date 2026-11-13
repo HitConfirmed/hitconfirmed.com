@@ -18,6 +18,7 @@ import { apiFetch } from '../utils/api';
 import TournamentFilterBar from './TournamentFilterBar';
 import { formatTournamentDateTime, parseTournamentDate } from '../utils/tournamentDate';
 import { pickDefaultRoundText } from '../utils/pickDefaultRound';
+import { championName } from '../utils/champion';
 
 const POLL_MS = 6000; // refresh markets/odds/pick'em every 6s while the Live page is open
 
@@ -559,8 +560,8 @@ const LiveBetting = () => {
       .sort(([, a], [, b]) => gamePriority(a) - gamePriority(b))
       .map(([gName, mkts]) => {
         const isSettled = mkts.length > 0 && mkts.every((m) => m.state === 'settled' || m.state === 'void');
-        const gfMarket = isSettled ? mkts.find((m) => m.state === 'settled' && /grand.final/i.test(m.round_text || '')) : null;
-        const winner = gfMarket ? shortTag(gfMarket.winner_id === gfMarket.player1_id ? gfMarket.player1_name : gfMarket.player2_name) : null;
+        const champ = isSettled ? championName(mkts) : null;
+        const winner = champ ? shortTag(champ) : null;
         // "Live" means the bracket has started and isn't fully settled yet -
         // not just "a set is being played this exact second." Between two
         // sets (one just settled, the next not yet opened) every market is

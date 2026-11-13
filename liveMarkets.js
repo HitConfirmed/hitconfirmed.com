@@ -211,6 +211,14 @@ async function fillBracketSlot({
   }
   if (existing.state === 'settled') return;
   if (existing.state === 'void') {
+    // An abandoned set (see reconcileOneStaleMarket's ABANDONED_SET_DAYS
+    // auto-void) keeps BOTH real players on its row. If start.gg is still
+    // offering the very same player for this slot, nothing re-seeded - it's
+    // the same stuck set being re-polled, and reviving it would put the
+    // tournament straight back into "Happening Now" (real case: Saltmine
+    // League Europe West Finals' never-reported Grand Final Reset).
+    const sameSlotPlayer = slot === 1 ? existing.player1_id : existing.player2_id;
+    if (existing.player1_id && existing.player2_id && playerId && sameSlotPlayer === playerId) return;
     // Void markets can be re-used when a bracket re-seeds or an opponent was
     // entered late. Refund any bet still 'placed' from the market's PRIOR
     // occupancy first — reusing the row must never carry a stray bet into the
@@ -637,7 +645,17 @@ async function getMarkets({ includeAll = false, pastOnly = false } = {}) {
             t.date AS tournament_date, t.city AS tournament_city, t.country AS tournament_country,
             tge.num_entrants AS tournament_num_entrants,
             g.name AS game_name,
-            p1.name AS player1_name, p2.name AS player2_name
+            p1.name AS player1_name, p2.name AS player2_name,
+            -- A Grand Final whose real reset was voided (abandoned/never
+            -- reported) has no known champion: if the losers-side player won
+            -- the GF, the title was still undecided. The client uses this to
+            -- avoid crowning the GF winner (see utils/champion.js).
+            CASE WHEN m.round_text LIKE 'Grand Final%' AND m.round_text NOT LIKE 'Grand Final Reset%'
+              THEN EXISTS (SELECT 1 FROM set_markets r
+                           WHERE r.tournament_id = m.tournament_id AND r.game_id = m.game_id
+                             AND r.state = 'void' AND r.round_text LIKE 'Grand Final Reset%'
+                             AND r.startgg_set_id GLOB '[0-9]*')
+              ELSE 0 END AS gf_reset_voided
      FROM set_markets m
      JOIN tournaments t ON t.id = m.tournament_id
      JOIN games g ON g.id = m.game_id

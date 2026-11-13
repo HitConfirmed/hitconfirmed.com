@@ -178,3 +178,49 @@ test('skips (never guesses) when start.gg no longer has the set at all', async (
   const market = await db.getAsync('SELECT state FROM set_markets WHERE id = ?', [marketId]);
   assert.equal(market.state, 'open');
 });
+
+// Real production case: Saltmine League - World Warrior 2026 - Europe West
+// Finals. The Grand Final Reset sat "in progress" 1-1 on start.gg for 13 days
+// (TO never reported it), so the closed market kept the whole tournament in
+// Happening Now indefinitely.
+const DAY = 24 * 60 * 60;
+const abandonedSet = (daysAgo, state = 2) => ({
+  state, winnerId: null, updatedAt: Math.floor(Date.now() / 1000) - daysAgo * DAY,
+  slots: [
+    { entrant: { id: 'e-a', name: 'Madkof', participants: [] }, standing: { stats: { score: { value: 1 } } } },
+    { entrant: { id: 'e-b', name: 'SCORE', participants: [] }, standing: { stats: { score: { value: 1 } } } },
+  ],
+});
+
+test('voids (and refunds) a closed market whose start.gg set has not been updated in 7+ days', async () => {
+  const { marketId, tournamentId, gameId, p1, p2 } = await seedMarket({ state: 'closed' });
+  await db.runAsync(`INSERT INTO users (id, balance_cents) VALUES (1, 0)`);
+  await db.runAsync(`INSERT INTO set_bets (user_id, market_id, picked_player_id, amount_cents, locked_odds) VALUES (1, ?, ?, 500, 2.0)`, [marketId, p1]);
+  const m = { id: marketId, state: 'closed', tournament_id: tournamentId, game_id: gameId, startgg_set_id: '104770041', player1_id: p1, player2_id: p2, round_text: 'Grand Final Reset', round_int: null, phase_group_id: null };
+
+  const result = await sync.reconcileOneStaleMarket(m, abandonedSet(13));
+  assert.equal(result, 'voided');
+  assert.equal((await db.getAsync('SELECT state FROM set_markets WHERE id = ?', [marketId])).state, 'void');
+  assert.equal((await db.getAsync('SELECT state FROM set_bets WHERE market_id = ?', [marketId])).state, 'refunded');
+  assert.equal((await db.getAsync('SELECT balance_cents FROM users WHERE id = 1')).balance_cents, 500);
+
+  // The 60s poller re-offering the same two players must NOT revive it -
+  // otherwise the tournament lands right back in Happening Now.
+  for (const [slot, pid] of [[1, p1], [2, p2]]) {
+    await lm.fillBracketSlot({ tournamentId, gameId, startggSetId: '104770041', roundText: 'Grand Final Reset', roundInt: null, phaseGroupId: null, slot, playerId: pid });
+  }
+  assert.equal((await db.getAsync('SELECT state FROM set_markets WHERE id = ?', [marketId])).state, 'void');
+});
+
+test('does not void a set that is in progress but was updated recently', async () => {
+  const { marketId, tournamentId, gameId, p1, p2 } = await seedMarket({ state: 'open' });
+  const m = { id: marketId, state: 'open', tournament_id: tournamentId, game_id: gameId, startgg_set_id: '104770041', player1_id: p1, player2_id: p2, round_text: 'Grand Final Reset' };
+  assert.equal(await sync.reconcileOneStaleMarket(m, abandonedSet(2)), 'closed');
+});
+
+test('never auto-voids a pending (never started) market, however old', async () => {
+  const { marketId, tournamentId, gameId, p1, p2 } = await seedMarket({ state: 'pending' });
+  const m = { id: marketId, state: 'pending', tournament_id: tournamentId, game_id: gameId, startgg_set_id: '104770041', player1_id: p1, player2_id: p2, round_text: 'Winners Semi-Final' };
+  assert.equal(await sync.reconcileOneStaleMarket(m, abandonedSet(30, 1)), 'skipped');
+  assert.equal((await db.getAsync('SELECT state FROM set_markets WHERE id = ?', [marketId])).state, 'pending');
+});

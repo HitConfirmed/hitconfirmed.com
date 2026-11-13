@@ -260,7 +260,10 @@ const Column = ({ col, markets, slip, onPick, demoControls, registerRef, bets, f
   const gfHasReset = col.key === 'GF' && nodes.some((n) => (n?.round_text || '').toLowerCase().includes('reset'));
   for (let i = 0; i < count; i++) {
     const roundText = (nodes[i]?.round_text || '').toLowerCase();
-    const isChampionMatch = col.key === 'GF' && (!gfHasReset || roundText.includes('reset'));
+    // A GF whose reset was voided (abandoned, never reported) decided nothing:
+    // the void reset is filtered out of the API, so without this flag the GF
+    // would look like the sole deciding match and crown the wrong player.
+    const isChampionMatch = col.key === 'GF' && !nodes[i]?.gf_reset_voided && (!gfHasReset || roundText.includes('reset'));
     const isResetNode = col.key === 'GF' && roundText.includes('reset');
     const nodeKey = nodes[i]?.id ?? `${col.key}-tbd-${i}`;
     const nodeEl = (
