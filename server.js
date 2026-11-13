@@ -11,6 +11,7 @@ const requireAuth = require('./auth/requireAuth');
 const { syncTournamentBySlug, syncRecent } = require('./syncStartgg');
 const { syncUpcoming, syncRecentResults } = require('./scripts/sync-upcoming');
 const { shouldDeferUpstreamSync } = require('./scripts/upstream-sync-deferral');
+const { syncLiquipediaUpcoming } = require('./scripts/sync-liquipedia-upcoming');
 const wallet = require('./wallet');
 const liveMarkets = require('./liveMarkets');
 const economy = require('./economy');
@@ -1020,6 +1021,13 @@ function scheduleStartGgSync() {
       await syncRecentResults({ days: 30 });
     } catch (err) {
       console.error('Start.gg recent-results sync failed:', err.message);
+    }
+    // After syncUpcoming, so any event start.gg now lists has already adopted
+    // its placeholder and is skipped here rather than re-created.
+    try {
+      await syncLiquipediaUpcoming();
+    } catch (err) {
+      console.error('Liquipedia upcoming sync failed:', err.message);
     }
     try {
       await db.runAsync(

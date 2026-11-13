@@ -22,6 +22,7 @@ const { startgg } = require('../startggClient');
 const { fieldProbabilities } = require('../liveOdds');
 const { applyFuturesMetaSchema, upsertEntrantCount, upsertTournamentGame } = require('../futuresMeta');
 const { findOrCreatePlayerId } = require('./lib/players');
+const { findMatchingTournament } = require('./sync-liquipedia-upcoming');
 
 const FIELD_PLAYER_NAME = 'The Field';
 // Futures open only within this many days of the event (seeding is finalized
@@ -100,6 +101,20 @@ const BRANDS = [
   // all (unlike Battle Arena Melbourne/Genesis, whose regexes existed but
   // silently rejected the real listing title).
   { search: 'Only The Best',           re: /^only\s+the\s+best\s+\d{4}\b/i },
+  // Added Nov 2026: recurring events with 250+ entrants in a tracked game in
+  // recent editions (from this app's own synced history + start.gg), never
+  // listed here before. Smash supermajors first.
+  { search: 'Supernova',               re: /^supernova\s+\d{4}\b/i },
+  // Listed as "篝火#16/KAGARIBI#16"; anchoring on 篝火 rejects "Pre-篝火" prelocals.
+  { search: 'KAGARIBI',                re: /^篝火\s*#\d+/ },
+  { search: 'Riptide',                 re: /^riptide\s+\d{4}\b/i },
+  { search: 'Umebura',                 re: /^ウメブラ\s*sp\s*\d+/i },
+  { search: 'Port Priority',           re: /^port\s+priority\b/i },
+  { search: 'Battle of BC',            re: /^battle\s+of\s+bc\s+\d+/i },
+  { search: 'LVL UP EXPO',             re: /^lvl\s+up\s+expo\b/i },
+  { search: 'MomoCon',                 re: /^momocon\s+\d{4}\b/i },
+  { search: 'Brussels Challenge',      re: /^brussels\s+challenge\b/i },
+  { search: 'BLINK RESPAWN',           re: /^blink\s+respawn\b/i },
 ];
 
 // Strip a leading "The " so "The Mixup 2026" matches /^mixup\b/.
@@ -198,7 +213,18 @@ async function upsertTournament(t) {
   const date = new Date(t.startAt * 1000).toISOString();
   const dateOnly = date.slice(0, 10);
   const logoUrl = logoFrom(t.images);
-  const existing = await db.getAsync('SELECT id FROM tournaments WHERE startgg_id = ?', [t.id]);
+  let existing = await db.getAsync('SELECT id FROM tournaments WHERE startgg_id = ?', [t.id]);
+  if (!existing) {
+    // Adopt a Liquipedia-announced placeholder for this same event instead of
+    // inserting a duplicate (see scripts/sync-liquipedia-upcoming.js). Clearing
+    // liquipedia_page hands ownership of the row to start.gg from here on.
+    const placeholder = await findMatchingTournament(t.name, dateOnly, { placeholders: true });
+    if (placeholder) {
+      await db.runAsync('UPDATE tournaments SET startgg_id = ?, liquipedia_page = NULL WHERE id = ?', [t.id, placeholder.id]);
+      console.log(`[sync-upcoming] "${t.name}" adopted Liquipedia placeholder id ${placeholder.id}`);
+      existing = { id: placeholder.id };
+    }
+  }
   const nameTaken = await db.getAsync('SELECT id FROM tournaments WHERE name = ? AND id != ?', [t.name, existing?.id ?? -1]);
   const name = nameTaken ? `${t.name} (${dateOnly})` : t.name;
   if (existing) {
@@ -482,7 +508,7 @@ async function syncRecentResults({ days = 30, minEntrants = 0 } = {}) {
   return { tournaments: withData, matches: totalMatches };
 }
 
-module.exports = { syncUpcoming, syncRecentResults, processTournament, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
+module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
 
 // CLI: `node scripts/sync-upcoming.js [--months N] [--top N] [--dry-run] [--results]`
 if (require.main === module) {

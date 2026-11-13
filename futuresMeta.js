@@ -16,6 +16,13 @@ async function applyFuturesMetaSchema() {
       FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
     )
   `);
+  // Key for Liquipedia-announced placeholder tournaments (see
+  // scripts/sync-liquipedia-upcoming.js). Lives here so every caller that
+  // already applies this schema (server boot, sync-upcoming) gets it too.
+  const cols = await db.allAsync('PRAGMA table_info(tournaments)');
+  if (cols.length && !cols.some((c) => c.name === 'liquipedia_page')) {
+    await db.runAsync('ALTER TABLE tournaments ADD COLUMN liquipedia_page TEXT');
+  }
 }
 
 // Upsert the entrant count for one event. Null/undefined counts are ignored so a

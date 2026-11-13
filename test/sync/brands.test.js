@@ -142,3 +142,20 @@ test('every BRANDS entry has a non-empty search term and a RegExp pattern', () =
     assert.ok(b.re instanceof RegExp, `brand "${b.search}" missing a RegExp pattern`);
   }
 });
+
+// Added Nov 2026 - real listing titles from start.gg.
+test('new series match their real start.gg titles and reject prelocals', () => {
+  assertMatches('Supernova', 'Supernova 2026');
+  assertRejects('Supernova', 'Supernova Starstorm');
+  assertMatches('KAGARIBI', '篝火#16/KAGARIBI#16');
+  assertRejects('KAGARIBI', 'Pre-篝火#16/Pre-KAGARIBI#16');
+  assertMatches('Riptide', 'Riptide 2026');
+  assertMatches('Umebura', 'ウメブラSP13 / UmeburaSP13');
+  assertMatches('Port Priority', 'Port Priority: DX');
+  assertRejects('Port Priority', 'Big Dawg XD - The Port Priority: DX Prelocal');
+  assertMatches('Battle of BC', 'Battle of BC 8');
+  assertMatches('LVL UP EXPO', 'LVL UP EXPO 2026');
+  assertMatches('MomoCon', 'MomoCon 2026');
+  assertMatches('Brussels Challenge', 'Brussels Challenge Major Edition 2026');
+  assertMatches('BLINK RESPAWN', 'BLINK RESPAWN 2026');
+});
