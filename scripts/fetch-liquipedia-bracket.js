@@ -355,7 +355,7 @@ async function main() {
   console.log('against the DB; ingest-manual-results.js will fail loudly with near-match suggestions for typos).');
 }
 
-module.exports = { extractFinalsBracket, extractMatch, extractGroupStages, fetchPageHtml, fetchPageWikitext };
+module.exports = { extractFinalsBracket, extractMatch, extractGroupStages, fetchPageHtml, fetchPageWikitext, USER_AGENT };
 
 if (require.main === module) {
   main().catch((err) => {

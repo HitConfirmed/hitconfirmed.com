@@ -19,7 +19,7 @@
 //    inserting a second row.
 const cheerio = require('cheerio');
 const db = require('../db/db');
-const { fetchPageHtml } = require('./fetch-liquipedia-bracket');
+const { fetchPageHtml, USER_AGENT } = require('./fetch-liquipedia-bracket');
 const { applyFuturesMetaSchema, upsertTournamentGame } = require('../futuresMeta');
 
 const TIER_PAGES = ['Tier_1_Tournaments', 'Tier_2_Tournaments'];
@@ -45,6 +45,23 @@ function parseLiquipediaDate(text) {
   return { start: iso(startYear, sm, Number(m[2])), end: iso(year, em, Number(m[4] || m[2])) };
 }
 
+const LIQUIPEDIA_ORIGIN = 'https://liquipedia.net';
+
+// The event's own logo from a table row. Liquipedia ships light/dark variants
+// for some; the app is dark-themed, so prefer darkmode, then allmode/any.
+// Takes the largest srcset candidate (2x = ~100px) for a crisp card icon.
+function leagueIconUrl($, cell) {
+  const spans = cell.find('span.league-icon-small-image').toArray();
+  if (!spans.length) return null;
+  const span = spans.find((s) => $(s).hasClass('darkmode'))
+    || spans.find((s) => !$(s).hasClass('lightmode')) || spans[0];
+  const img = $(span).find('img').first();
+  const srcset = (img.attr('srcset') || '').split(',').map((s) => s.trim().split(/\s+/)[0]).filter(Boolean);
+  const src = srcset[srcset.length - 1] || img.attr('src');
+  if (!src) return null;
+  return src.startsWith('http') ? src : `${LIQUIPEDIA_ORIGIN}${src}`;
+}
+
 // One row per (event, game) from a Liquipedia "Portal tournaments table".
 function parseTierPage(html) {
   const $ = cheerio.load(html);
@@ -59,7 +76,7 @@ function parseTierPage(html) {
     if (!name || !game || !dates) return;
     const winner = cells.eq(5).text().replace(/ /g, ' ').trim();
     rows.push({
-      name, game, ...dates,
+      name, game, ...dates, iconUrl: leagueIconUrl($, first),
       location: cells.eq(4).text().replace(/ /g, ' ').trim() || null,
       decided: !!winner && !/^tbd$/i.test(winner),
     });
@@ -75,8 +92,10 @@ function upcomingEvents(rows, today = new Date().toISOString().slice(0, 10)) {
   for (const r of rows) {
     if (r.decided || r.start < today || r.start > horizon) continue;
     const key = `${r.name}|${r.start}`;
-    if (!byKey.has(key)) byKey.set(key, { name: r.name, start: r.start, location: r.location, games: new Set() });
-    byKey.get(key).games.add(r.game);
+    if (!byKey.has(key)) byKey.set(key, { name: r.name, start: r.start, location: r.location, iconUrl: null, games: new Set() });
+    const ev = byKey.get(key);
+    ev.games.add(r.game);
+    ev.iconUrl = ev.iconUrl || r.iconUrl;
   }
   return [...byKey.values()].map((e) => ({ ...e, games: [...e.games] }));
 }
@@ -108,7 +127,6 @@ function sameEventName(a, b) {
   return overlap >= Math.min(2, small) && overlap / small >= 0.75;
 }
 
-const dayDiff = (a, b) => Math.abs(Date.parse(String(a).slice(0, 10)) - Date.parse(String(b).slice(0, 10))) / 86400000;
 
 // Any tournament (start.gg-synced or manual) that is this event, excluding
 // Liquipedia placeholders themselves.
@@ -130,34 +148,94 @@ const GAME_ALIASES = {
   'avatar legends': 'avatar legends the fighting game',
 };
 
-let gamesCache = null;
-async function resolveGameId(liquipediaGame) {
-  if (!gamesCache) {
-    // Prefer start.gg-linked rows: the games table has legacy duplicates
-    // ("Tekken 8" vs "TEKKEN 8") and the start.gg one is what everything
-    // else (markets, futures) attaches to.
-    gamesCache = (await db.allAsync('SELECT id, name, startgg_id FROM games ORDER BY (startgg_id IS NULL), id'))
-      .map((g) => ({ id: g.id, n: norm(g.name) }));
-  }
-  const want = GAME_ALIASES[norm(liquipediaGame)] || norm(liquipediaGame);
-  const exact = gamesCache.find((g) => g.n === want);
+// Existing games row for a game name from another source, matched loosely
+// (case, punctuation, diacritics: "MARVEL Tōkon: Fighting Souls" = "Marvel
+// Tokon: Fighting Souls"; "Avatar Legends" = "Avatar Legends: The Fighting
+// Game"). Prefers start.gg-linked rows: the games table has legacy
+// duplicates ("Tekken 8" vs "TEKKEN 8") and the start.gg one is what
+// markets and futures attach to. Shared with sync-upcoming's upsertGame.
+async function findGameIdByName(name, { prefix = true } = {}) {
+  const games = (await db.allAsync('SELECT id, name FROM games ORDER BY (startgg_id IS NULL), id'))
+    .map((g) => ({ id: g.id, n: norm(g.name) }));
+  const want = GAME_ALIASES[norm(name)] || norm(name);
+  if (!want) return null;
+  const exact = games.find((g) => g.n === want);
   if (exact) return exact.id;
-  const prefix = gamesCache.find((g) => g.n.startsWith(`${want} `) || want.startsWith(`${g.n} `));
-  return prefix ? prefix.id : null;
+  if (!prefix) return null;
+  const loose = games.find((g) => g.n.startsWith(`${want} `) || want.startsWith(`${g.n} `));
+  return loose ? loose.id : null;
+}
+
+// Liquipedia's fighting-games wiki only lists fighting games, so any game it
+// shows at a Tier 1/2 event is one the app should know about: match it to an
+// existing row, or add it. Either way flag it auto_tracked, which is what
+// tells sync-upcoming to follow this game's events on start.gg too (beyond
+// its hard-coded GAME_IDS) - otherwise a newly released game would never be
+// picked up anywhere.
+async function resolveGameId(liquipediaGame) {
+  let id = await findGameIdByName(liquipediaGame);
+  if (!id) {
+    const r = await db.runAsync('INSERT INTO games (name, auto_tracked) VALUES (?, 1)', [liquipediaGame]);
+    id = r.lastID;
+    console.log(`[liquipedia-upcoming] added new game "${liquipediaGame}" (id ${id})`);
+  } else {
+    await db.runAsync('UPDATE games SET auto_tracked = 1 WHERE id = ? AND COALESCE(auto_tracked, 0) = 0', [id]);
+  }
+  return id;
+}
+
+// ---- logos ----------------------------------------------------------------
+
+// Logos are downloaded once and served from our own /api/tournament-logo/:id
+// rather than hotlinked from Liquipedia. Never replaces a logo another source
+// (start.gg) already set; re-downloads only when Liquipedia's file changes.
+const OWN_LOGO_PREFIX = '/api/tournament-logo/';
+
+async function storeLogo(tournamentId, iconUrl, fetchImage) {
+  if (!iconUrl) return false;
+  const t = await db.getAsync('SELECT logo_url FROM tournaments WHERE id = ?', [tournamentId]);
+  if (!t || (t.logo_url && !t.logo_url.startsWith(OWN_LOGO_PREFIX))) return false;
+  const have = await db.getAsync('SELECT source_url FROM tournament_logos WHERE tournament_id = ?', [tournamentId]);
+  if (!have || have.source_url !== iconUrl) {
+    let img;
+    try {
+      img = await fetchImage(iconUrl);
+    } catch (err) {
+      console.error(`[liquipedia-upcoming] logo download failed (${iconUrl}): ${err.message}`);
+      return false;
+    }
+    // Raster only: an SVG served from our own origin could carry script.
+    if (!img || !/^image\/(png|jpeg|gif|webp|avif)\b/i.test(img.contentType || '') || !img.data?.length || img.data.length > 512 * 1024) return false;
+    await db.runAsync(
+      `INSERT INTO tournament_logos (tournament_id, source_url, content_type, data, updated_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(tournament_id) DO UPDATE SET source_url = excluded.source_url,
+         content_type = excluded.content_type, data = excluded.data, updated_at = CURRENT_TIMESTAMP`,
+      [tournamentId, iconUrl, img.contentType, img.data]
+    );
+  }
+  await db.runAsync('UPDATE tournaments SET logo_url = ? WHERE id = ?', [`${OWN_LOGO_PREFIX}${tournamentId}`, tournamentId]);
+  return true;
+}
+
+// Static files, not API calls - Liquipedia's terms still ask for a real
+// User-Agent and gentle pacing (see IMAGE_GAP_MS in the sync loop).
+async function fetchLiquipediaImage(url) {
+  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return { contentType: res.headers.get('content-type'), data: Buffer.from(await res.arrayBuffer()) };
 }
 
 // ---- schema + write --------------------------------------------------------
 
-async function upsertPlaceholder(ev) {
+async function upsertPlaceholder(ev, fetchImage) {
   const gameIds = [];
-  for (const g of ev.games) {
-    const id = await resolveGameId(g);
-    if (id) gameIds.push(id);
-    else console.log(`[liquipedia-upcoming] "${ev.name}": game "${g}" not in games table - skipped`);
-  }
-  if (!gameIds.length) return 'no-games';
+  for (const g of ev.games) gameIds.push(await resolveGameId(g));
 
-  if (await findMatchingTournament(ev.name, ev.start)) {
+  const match = await findMatchingTournament(ev.name, ev.start);
+  if (match) {
+    // Fill in a missing logo on the tracked row (never replaces start.gg's).
+    await storeLogo(match.id, ev.iconUrl, fetchImage);
     // Tracked elsewhere now (e.g. a manual EWC entry seeded after this
     // placeholder). Placeholders only ever own tournament_games rows -
     // anything with markets/seeds has a startgg_id - so it's safe to drop.
@@ -186,6 +264,7 @@ async function upsertPlaceholder(ev) {
     row = { id: r.lastID };
   }
   for (const gid of gameIds) await upsertTournamentGame(row.id, gid);
+  await storeLogo(row.id, ev.iconUrl, fetchImage);
   return 'upserted';
 }
 
@@ -194,9 +273,11 @@ const displayName = (name) => name.replace(/^Evolution Championship Series:\s*/i
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function syncLiquipediaUpcoming({ fetchPage = fetchPageHtml, gapMs = PARSE_GAP_MS, today } = {}) {
+const IMAGE_GAP_MS = 2000;
+
+async function syncLiquipediaUpcoming({ fetchPage = fetchPageHtml, fetchImage = fetchLiquipediaImage, gapMs = PARSE_GAP_MS, imageGapMs = IMAGE_GAP_MS, today } = {}) {
   await applyFuturesMetaSchema();
-  gamesCache = null;
+  const pacedFetchImage = async (url) => { try { return await fetchImage(url); } finally { await sleep(imageGapMs); } };
   const rows = [];
   for (let i = 0; i < TIER_PAGES.length; i++) {
     if (i) await sleep(gapMs);
@@ -207,15 +288,15 @@ async function syncLiquipediaUpcoming({ fetchPage = fetchPageHtml, gapMs = PARSE
     }
   }
   const events = upcomingEvents(rows, today);
-  const stats = { events: events.length, upserted: 0, exists: 0, 'no-games': 0 };
-  for (const ev of events) stats[await upsertPlaceholder(ev)]++;
-  console.log(`[liquipedia-upcoming] ${stats.events} announced event(s): ${stats.upserted} placeholder(s) upserted, ${stats.exists} already tracked, ${stats['no-games']} with no known games`);
+  const stats = { events: events.length, upserted: 0, exists: 0 };
+  for (const ev of events) stats[await upsertPlaceholder(ev, pacedFetchImage)]++;
+  console.log(`[liquipedia-upcoming] ${stats.events} announced event(s): ${stats.upserted} placeholder(s) upserted, ${stats.exists} already tracked`);
   return stats;
 }
 
 module.exports = {
   syncLiquipediaUpcoming, parseLiquipediaDate, parseTierPage, upcomingEvents,
-  sameEventName, findMatchingTournament, resolveGameId,
+  sameEventName, findMatchingTournament, resolveGameId, findGameIdByName, OWN_LOGO_PREFIX,
 };
 
 if (require.main === module) {

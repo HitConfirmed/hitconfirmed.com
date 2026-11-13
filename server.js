@@ -62,6 +62,21 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Tournament logos downloaded from Liquipedia (scripts/sync-liquipedia-upcoming.js),
+// served from our own DB rather than hotlinked.
+app.get('/api/tournament-logo/:id', async (req, res) => {
+  try {
+    const row = await db.getAsync('SELECT content_type, data FROM tournament_logos WHERE tournament_id = ?', [Number(req.params.id)]);
+    if (!row) return res.status(404).end();
+    res.set('Content-Type', row.content_type);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.send(row.data);
+  } catch (err) {
+    res.status(500).end();
+  }
+});
+
 // API Routes
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;

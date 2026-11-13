@@ -23,6 +23,23 @@ async function applyFuturesMetaSchema() {
   if (cols.length && !cols.some((c) => c.name === 'liquipedia_page')) {
     await db.runAsync('ALTER TABLE tournaments ADD COLUMN liquipedia_page TEXT');
   }
+  // Games discovered at Liquipedia Tier 1/2 events; sync-upcoming follows
+  // these on start.gg in addition to its hard-coded GAME_IDS.
+  const gameCols = await db.allAsync('PRAGMA table_info(games)');
+  if (gameCols.length && !gameCols.some((c) => c.name === 'auto_tracked')) {
+    await db.runAsync('ALTER TABLE games ADD COLUMN auto_tracked INTEGER NOT NULL DEFAULT 0');
+  }
+  // Tournament logos downloaded from Liquipedia, served by
+  // GET /api/tournament-logo/:id instead of hotlinking.
+  await db.runAsync(`
+    CREATE TABLE IF NOT EXISTS tournament_logos (
+      tournament_id INTEGER PRIMARY KEY,
+      source_url    TEXT NOT NULL,
+      content_type  TEXT NOT NULL,
+      data          BLOB NOT NULL,
+      updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
 
 // Upsert the entrant count for one event. Null/undefined counts are ignored so a

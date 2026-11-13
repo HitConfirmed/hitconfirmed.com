@@ -22,7 +22,7 @@ const { startgg } = require('../startggClient');
 const { fieldProbabilities } = require('../liveOdds');
 const { applyFuturesMetaSchema, upsertEntrantCount, upsertTournamentGame } = require('../futuresMeta');
 const { findOrCreatePlayerId } = require('./lib/players');
-const { findMatchingTournament } = require('./sync-liquipedia-upcoming');
+const { findMatchingTournament, findGameIdByName } = require('./sync-liquipedia-upcoming');
 
 const FIELD_PLAYER_NAME = 'The Field';
 // Futures open only within this many days of the event (seeding is finalized
@@ -242,7 +242,13 @@ async function upsertTournament(t) {
 }
 
 async function upsertGame(g) {
-  const existing = await db.getAsync('SELECT id FROM games WHERE startgg_id = ? OR name = ?', [g.id, g.name]);
+  let existing = await db.getAsync('SELECT id FROM games WHERE startgg_id = ? OR name = ?', [g.id, g.name]);
+  if (!existing) {
+    // Same game spelled differently by Liquipedia (e.g. "MARVEL Tōkon" vs
+    // "Marvel Tokon"): link the existing row rather than add a duplicate.
+    const id = await findGameIdByName(g.name, { prefix: false });
+    if (id) existing = { id };
+  }
   if (existing) {
     await db.runAsync('UPDATE games SET startgg_id = COALESCE(startgg_id, ?) WHERE id = ?', [g.id, existing.id]);
     return existing.id;
@@ -300,14 +306,16 @@ function pickTopSeeds(ev, n) {
 }
 
 async function processTournament(slug, args) {
-  const data = await gql(TOURNAMENT_ENTRANTS, { slug, ids: GAME_IDS });
+  const ids = args.trackedIds || GAME_IDS;
+  if (args.trackedIds && !args.dryRun) await linkPendingGames(slug, ids);
+  const data = await gql(TOURNAMENT_ENTRANTS, { slug, ids });
   const t = data?.tournament;
   if (!t) return { events: 0, players: 0 };
 
   // Events on a tracked game. numEntrants is often null for majors more than a
   // few weeks out (registration data hasn't populated), so DON'T gate the
   // tournament's existence on it — only its futures (priced below) need counts.
-  const trackedEvents = (t.events || []).filter((ev) => ev.videogame && GAME_IDS.includes(Number(ev.videogame.id)));
+  const trackedEvents = (t.events || []).filter((ev) => ev.videogame && ids.map(Number).includes(Number(ev.videogame.id)));
   if (trackedEvents.length === 0) return { events: 0, players: 0, recorded: false };
 
   // Always record the tournament so it appears on the page (with a countdown),
@@ -394,8 +402,47 @@ async function processTournament(slug, args) {
   return { events: eventCount, players: playerCount, recorded: !args.dryRun };
 }
 
+// start.gg videogame ids to follow: the hard-coded GAME_IDS plus any game
+// Liquipedia has shown at a Tier 1/2 event (games.auto_tracked, set by
+// sync-liquipedia-upcoming) - so a newly released fighting game gets picked
+// up without a code change.
+async function getTrackedGameIds() {
+  const ids = new Set(GAME_IDS.map(Number));
+  try {
+    const rows = await db.allAsync('SELECT startgg_id FROM games WHERE auto_tracked = 1 AND startgg_id IS NOT NULL');
+    for (const r of rows) ids.add(Number(r.startgg_id));
+  } catch { /* column not migrated yet (dry run) - fixed list only */ }
+  return [...ids];
+}
+
+// Link auto-tracked games that have no start.gg id yet (added from
+// Liquipedia) to the videogame a tournament's events actually use, by exact
+// (normalized) name. Only queried when such games exist.
+const TOURNAMENT_EVENT_GAMES = `
+query EventGames($slug: String!) {
+  tournament(slug: $slug) { events(limit: 60) { videogame { id name } } }
+}`;
+async function linkPendingGames(slug, trackedIds) {
+  let pending;
+  try {
+    pending = await db.allAsync('SELECT id, name FROM games WHERE auto_tracked = 1 AND startgg_id IS NULL');
+  } catch { return; }
+  if (!pending.length) return;
+  const data = await gql(TOURNAMENT_EVENT_GAMES, { slug });
+  for (const ev of data?.tournament?.events || []) {
+    const vg = ev.videogame;
+    if (!vg || trackedIds.includes(Number(vg.id))) continue;
+    const id = await findGameIdByName(vg.name, { prefix: false });
+    if (id && pending.some((p) => p.id === id)) {
+      await db.runAsync('UPDATE games SET startgg_id = ? WHERE id = ? AND startgg_id IS NULL', [vg.id, id]);
+      trackedIds.push(Number(vg.id));
+      console.log(`[sync-upcoming] linked new game "${vg.name}" to start.gg videogame ${vg.id}`);
+    }
+  }
+}
+
 // Find unique tournament slugs matching the curated brands in a date window.
-async function findBrandTournaments(query, after, before) {
+async function findBrandTournaments(query, after, before, ids = GAME_IDS) {
   const seen = new Map(); // slug -> name
   // Page through each brand's matches (most brands fit in one page; World Warrior
   // spans several across all regions). Stop a brand once a short page comes back.
@@ -404,7 +451,7 @@ async function findBrandTournaments(query, after, before) {
     for (let page = 1; page <= MAX_PAGES; page++) {
       let nodes;
       try {
-        const data = await gql(query, { name: brand.search, after, before, ids: GAME_IDS, page });
+        const data = await gql(query, { name: brand.search, after, before, ids, page });
         nodes = data?.tournaments?.nodes || [];
       } catch (err) {
         console.error(`Brand "${brand.search}" p${page} search failed: ${err.message}`);
@@ -445,7 +492,8 @@ async function syncUpcoming({ months = 12, top = 8, dryRun = false } = {}) {
   const before = now + months * 30 * 86400;
   console.log(`[sync-upcoming] next ${months} months, top ${top} seeds${dryRun ? ' [DRY RUN]' : ''}`);
 
-  const seen = await findBrandTournaments(BRAND_SEARCH, now, before);
+  const trackedIds = await getTrackedGameIds();
+  const seen = await findBrandTournaments(BRAND_SEARCH, now, before, trackedIds);
   console.log(`[sync-upcoming] found ${seen.size} upcoming major tournament(s).`);
 
   // Also sweep a plain date-range window around "now" (see NEAR_NOW_WINDOW_DAYS
@@ -453,7 +501,7 @@ async function syncUpcoming({ months = 12, top = 8, dryRun = false } = {}) {
   // in progress — processTournament seeds an already-started event exactly
   // the same way as an upcoming one.
   const nearNow = await findBrandTournaments(
-    NEAR_NOW_BRAND_SEARCH, now - NEAR_NOW_WINDOW_DAYS * 86400, now + NEAR_NOW_WINDOW_DAYS * 86400
+    NEAR_NOW_BRAND_SEARCH, now - NEAR_NOW_WINDOW_DAYS * 86400, now + NEAR_NOW_WINDOW_DAYS * 86400, trackedIds
   );
   let nearNowNew = 0;
   for (const [slug, name] of nearNow) {
@@ -466,7 +514,7 @@ async function syncUpcoming({ months = 12, top = 8, dryRun = false } = {}) {
   let totalEvents = 0, totalPlayers = 0, withData = 0, countdownOnly = 0;
   for (const [slug, name] of seen) {
     try {
-      const { events, players, recorded } = await processTournament(slug, { top, dryRun });
+      const { events, players, recorded } = await processTournament(slug, { top, dryRun, trackedIds });
       if (events > 0) {
         withData++; totalEvents += events; totalPlayers += players;
         console.log(`  ${name} [${slug}]: ${events} game(s), ${players} entrant(s)`);
@@ -508,7 +556,7 @@ async function syncRecentResults({ days = 30, minEntrants = 0 } = {}) {
   return { tournaments: withData, matches: totalMatches };
 }
 
-module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
+module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, upsertGame, getTrackedGameIds, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
 
 // CLI: `node scripts/sync-upcoming.js [--months N] [--top N] [--dry-run] [--results]`
 if (require.main === module) {
