@@ -10,6 +10,7 @@ const { secretKey } = require('./auth/secret'); // shared with the requireAuth m
 const requireAuth = require('./auth/requireAuth');
 const { syncTournamentBySlug, syncRecent } = require('./syncStartgg');
 const { syncUpcoming, syncRecentResults } = require('./scripts/sync-upcoming');
+const { shouldDeferUpstreamSync } = require('./scripts/upstream-sync-deferral');
 const wallet = require('./wallet');
 const liveMarkets = require('./liveMarkets');
 const economy = require('./economy');
@@ -1035,8 +1036,21 @@ function scheduleStartGgSync() {
   // one that gets 429'd retries with its own backoff before giving up, so a
   // single run can take a long time to grind through and starve the live
   // poller the whole way. Defer entirely rather than race it.
+  const readLastRun = async () => {
+    try {
+      const row = await db.getAsync('SELECT value FROM app_state WHERE key = ?', [LAST_RUN_KEY]);
+      return row ? new Date(row.value).getTime() : null;
+    } catch (err) {
+      console.error(`Failed to read ${LAST_RUN_KEY}:`, err.message);
+      return null;
+    }
+  };
+  // Defer for a live tournament, but only up to MAX_DEFER_MS since the last
+  // completed run (see scripts/upstream-sync-deferral.js). A stuck "live"
+  // tournament once blocked this sync for two weeks.
   const attempt = async () => {
-    if (await hasLiveTournamentToday()) {
+    const live = await hasLiveTournamentToday();
+    if (shouldDeferUpstreamSync({ live, lastRunMs: await readLastRun() })) {
       console.log('[startgg-sync] deferring — a tournament is live or scheduled today; rechecking in 1h');
       setTimeout(attempt, DEFER_MS);
       return;
