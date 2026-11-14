@@ -212,6 +212,8 @@ const logoFileBySlug = {
   'pump-it-up-phoenix': 'pump-it-up-phoenix.webp',
   'step-mania-x': 'step-mania-x.png',
   'avatar-legends-the-fighting-game': 'avatar-legends-the-fighting-game.png',
+  // First game auto-added from Liquipedia (SNK World Championship 2026 Finals).
+  'art-of-fighting-3': 'art-of-fighting-3.webp',
 };
 
 export function getGameLogoSources(name) {

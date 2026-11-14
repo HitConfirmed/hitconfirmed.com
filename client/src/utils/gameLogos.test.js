@@ -18,3 +18,7 @@ test('resolves Avatar Legends: The Fighting Game to its shipped filename', () =>
   expect(getGameLogoSources('Avatar Legends: The Fighting Game').png)
     .toMatch(/avatar-legends-the-fighting-game\.png$/);
 });
+
+test('resolves Art of Fighting 3 to its shipped webp', () => {
+  expect(getGameLogoSources('Art of Fighting 3').webp).toMatch(/art-of-fighting-3\.webp$/);
+});
