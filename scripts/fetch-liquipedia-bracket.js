@@ -45,7 +45,7 @@ const path = require('path');
 const cheerio = require('cheerio');
 
 const WIKI_API = 'https://liquipedia.net/fighters/api.php';
-const USER_AGENT = 'HitConfirmedApp/1.0 (https://github.com/HitConfirmed/hitconfirmed.com; contact via repo)';
+const USER_AGENT = 'HitConfirmedApp/1.0 (https://hitconfirmed.com)';
 
 function fail(msg) {
   throw new Error(msg);
