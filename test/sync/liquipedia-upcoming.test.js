@@ -187,3 +187,39 @@ test('rejects non-raster logos (an SVG served from our origin could run script)'
   assert.equal((await db.getAsync('SELECT COUNT(*) c FROM tournament_logos')).c, 0);
   assert.equal((await db.getAsync(`SELECT logo_url FROM tournaments WHERE name = 'Capcom Cup 13'`)).logo_url, null);
 });
+
+// Found by the daily tournament reality check (2026-11-14): Astral Finish
+// 2026 was live on start.gg (6 events in progress) while the official site
+// still showed its Liquipedia countdown card with 2 of its games and no
+// brackets - placeholders were only ever adopted when the series happened to
+// be in BRANDS AND start.gg's fuzzy name search returned it (it never returns
+// "Capcom Cup 13"). The daily sync must look each placeholder up itself.
+test('finds the start.gg page of a Liquipedia placeholder outside BRANDS (by slug or name), rejecting look-alikes', async () => {
+  await run();
+  await db.runAsync(`INSERT INTO tournaments (name, date, city, country, liquipedia_page) VALUES
+    ('Astral Finish 2026', '2026-11-13', 'Zapopan', '', 'Astral Finish 2026'),
+    ('SNK World Championship 2026 Finals', '2026-11-28', 'Stockholm', '', 'SNK World Championship 2026 Finals')`);
+  const at = (d) => Date.parse(d) / 1000;
+  const calls = [];
+  const query = async (q, v) => {
+    calls.push(v);
+    if (v.slug === 'astral-finish-2026') return { tournament: { id: 1, name: 'Astral Finish 2026', slug: 'tournament/astral-finish-2026', startAt: at('2026-11-13T16:00:00Z') } };
+    if (v.slug === 'capcom-cup-13') return { tournament: { id: 2, name: 'Capcom Cup 13', slug: 'tournament/capcom-cup-13', startAt: at('2027-03-10T05:00:00Z') } };
+    // Same slug, different (older) event: wrong date - must not be adopted.
+    if (v.slug === 'tekken-world-tour-finals-2026') return { tournament: { id: 3, name: 'Tekken World Tour Finals 2026', slug: 'tournament/tekken-world-tour-finals-2026', startAt: at('2026-01-20T00:00:00Z') } };
+    if (v.name === 'SNK World Championship 2026 Finals') {
+      return { tournaments: { nodes: [
+        { id: 4, name: 'Red Dirt Rumble 11/29/2026', slug: 'tournament/red-dirt-rumble', startAt: at('2026-11-29T00:00:00Z') },
+        { id: 5, name: 'SNK World Championship 2026', slug: 'tournament/snk-world-championship-2026-2', startAt: at('2026-11-27T11:00:00Z') },
+      ] } };
+    }
+    if (v.slug) return { tournament: null };
+    return { tournaments: { nodes: [] } };
+  };
+  const found = await su.findPlaceholderSlugs(query);
+  assert.deepEqual([...found.keys()].sort(), [
+    'tournament/astral-finish-2026', 'tournament/capcom-cup-13', 'tournament/snk-world-championship-2026-2',
+  ]);
+  // A slug hit skips the name search.
+  assert.ok(!calls.some((v) => v.name === 'Astral Finish 2026'));
+});

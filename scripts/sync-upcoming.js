@@ -22,7 +22,7 @@ const { startgg, EVENTS_LIMIT } = require('../startggClient');
 const { fieldProbabilities } = require('../liveOdds');
 const { applyFuturesMetaSchema, upsertEntrantCount, upsertTournamentGame } = require('../futuresMeta');
 const { findOrCreatePlayerId } = require('./lib/players');
-const { findMatchingTournament, findGameIdByName } = require('./sync-liquipedia-upcoming');
+const { findMatchingTournament, findGameIdByName, sameEventName } = require('./sync-liquipedia-upcoming');
 
 const FIELD_PLAYER_NAME = 'The Field';
 // Futures open only within this many days of the event (seeding is finalized
@@ -485,6 +485,64 @@ async function findBrandTournaments(query, after, before, ids = GAME_IDS) {
   return seen;
 }
 
+// Liquipedia-announced placeholders (sync-liquipedia-upcoming.js) are meant
+// to be ADOPTED by their start.gg page once one exists - but only BRANDS
+// searches ever reached upsertTournament, so a Tier 1/2 event outside BRANDS
+// (Astral Finish, MINDSET, Battle Coliseum, SNK World Championship...) stayed
+// a countdown card forever: no brackets even while it was live on start.gg,
+// and only Liquipedia's partial game list. start.gg's name search also misses
+// some brand events (Capcom Cup 13). So look each placeholder up directly:
+// by slug guessed from its name, then by name search around its date, and
+// accept only the same event (sameEventName) starting within 3 days.
+const PLACEHOLDER_MATCH_DAYS = 3;
+const TOURNAMENT_BY_SLUG = `
+query BySlug($slug: String!) { tournament(slug: $slug) { id name slug startAt } }`;
+const NAME_NEAR_DATE = `
+query ByName($name: String!, $after: Timestamp!, $before: Timestamp!) {
+  tournaments(query: { perPage: 25, filter: { name: $name, afterDate: $after, beforeDate: $before } }) {
+    nodes { id name slug startAt }
+  }
+}`;
+const slugify = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+async function findPlaceholderSlugs(query = gql) {
+  let rows;
+  try {
+    rows = await db.allAsync(
+      `SELECT id, name, date, liquipedia_page FROM tournaments
+       WHERE liquipedia_page IS NOT NULL AND startgg_id IS NULL
+         AND date(date, '+14 days') >= date('now')`
+    );
+  } catch { return new Map(); } // column not migrated yet (dry run)
+  const found = new Map(); // slug -> name
+  for (const p of rows) {
+    const day = Date.parse(String(p.date).slice(0, 10)) / 1000;
+    const names = [...new Set([p.name, p.liquipedia_page].filter(Boolean))];
+    const isMatch = (t) => t && t.slug && Number.isFinite(t.startAt)
+      && Math.abs(t.startAt - day) <= (PLACEHOLDER_MATCH_DAYS + 1) * 86400
+      && names.some((n) => sameEventName(t.name, n));
+    let hit = null;
+    try {
+      for (const slug of [...new Set(names.map(slugify))]) {
+        const t = (await query(TOURNAMENT_BY_SLUG, { slug }))?.tournament;
+        if (isMatch(t)) { hit = t; break; }
+      }
+      if (!hit) {
+        const data = await query(NAME_NEAR_DATE, {
+          name: p.name, after: day - PLACEHOLDER_MATCH_DAYS * 86400, before: day + (PLACEHOLDER_MATCH_DAYS + 1) * 86400,
+        });
+        hit = (data?.tournaments?.nodes || []).find(isMatch) || null;
+      }
+    } catch (err) {
+      console.error(`[sync-upcoming] start.gg lookup for placeholder "${p.name}" failed: ${err.message}`);
+      continue;
+    }
+    if (hit) found.set(hit.slug, hit.name);
+  }
+  return found;
+}
+
 // Future page: upcoming major tournaments + their top seeds.
 async function syncUpcoming({ months = 12, top = 8, dryRun = false } = {}) {
   if (!dryRun) await applyFuturesMetaSchema();
@@ -509,6 +567,15 @@ async function syncUpcoming({ months = 12, top = 8, dryRun = false } = {}) {
   }
   if (nearNowNew > 0) {
     console.log(`[sync-upcoming] +${nearNowNew} tournament(s) near "now" needing a seeding pass.`);
+  }
+
+  const placeholderHits = await findPlaceholderSlugs();
+  let adoptable = 0;
+  for (const [slug, name] of placeholderHits) {
+    if (!seen.has(slug)) { seen.set(slug, name); adoptable++; }
+  }
+  if (adoptable > 0) {
+    console.log(`[sync-upcoming] +${adoptable} Liquipedia-announced tournament(s) now on start.gg.`);
   }
 
   let totalEvents = 0, totalPlayers = 0, withData = 0, countdownOnly = 0;
@@ -556,7 +623,7 @@ async function syncRecentResults({ days = 30, minEntrants = 0 } = {}) {
   return { tournaments: withData, matches: totalMatches };
 }
 
-module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, upsertGame, getTrackedGameIds, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
+module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, upsertGame, findPlaceholderSlugs, getTrackedGameIds, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
 
 // CLI: `node scripts/sync-upcoming.js [--months N] [--top N] [--dry-run] [--results]`
 if (require.main === module) {
