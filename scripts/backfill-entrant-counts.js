@@ -11,7 +11,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const db = require('../db/db');
-const { startgg } = require('../startggClient');
+const { startgg, EVENTS_LIMIT } = require('../startggClient');
 const { applyFuturesMetaSchema, upsertEntrantCount } = require('../futuresMeta');
 const { GAME_IDS } = require('./sync-upcoming');
 
@@ -19,7 +19,7 @@ const QUERY = `
 query EntrantCounts($id: ID!, $ids: [ID]) {
   tournament(id: $id) {
     id name
-    events(limit: 30, filter: { videogameId: $ids }) {
+    events(limit: ${EVENTS_LIMIT}, filter: { videogameId: $ids }) {
       id numEntrants videogame { id name }
     }
   }

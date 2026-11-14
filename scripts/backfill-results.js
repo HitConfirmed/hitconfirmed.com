@@ -24,7 +24,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const fs = require('fs');
 const db = require('../db/db');
-const { startgg } = require('../startggClient');
+const { startgg, EVENTS_LIMIT } = require('../startggClient');
 const { findOrCreatePlayerId } = require('./lib/players');
 
 const STATE_FILE = path.join(__dirname, '.backfill-state.json');
@@ -71,7 +71,7 @@ query TournamentResults($slug: String!, $videogameIds: [ID]) {
   tournament(slug: $slug) {
     id name city countryCode startAt
     images { type url }
-    events(limit: 40, filter: { videogameId: $videogameIds }) {
+    events(limit: ${EVENTS_LIMIT}, filter: { videogameId: $videogameIds }) {
       id name numEntrants state
       videogame { id name }
       standings(query: { perPage: 2, page: 1 }) {

@@ -8,7 +8,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const db = require('../db/db');
-const { startgg } = require('../startggClient');
+const { startgg, EVENTS_LIMIT } = require('../startggClient');
 const { applyFuturesMetaSchema, upsertTournamentGame, upsertEntrantCount } = require('../futuresMeta');
 
 const GAME_IDS = require('./sync-upcoming').GAME_IDS;
@@ -37,7 +37,7 @@ async function gql(query, variables) {
 const EVENTS_QUERY = `
 query TournamentEvents($id: ID!) {
   tournament(id: $id) {
-    events(limit: 30) {
+    events(limit: ${EVENTS_LIMIT}) {
       id name numEntrants
       videogame { id name }
     }

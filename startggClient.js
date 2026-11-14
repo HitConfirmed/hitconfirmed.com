@@ -18,4 +18,12 @@ async function startgg(query, variables = {}, tokenOverride) {
   return res.data.data;
 }
 
-module.exports = { startgg };
+// start.gg applies an events() `limit` BEFORE the videogameId filter, not
+// after it. With limit 20, Frosty Faustings XIX (many side events) returned
+// only 7 of its 14 tracked games - Street Fighter 6, TEKKEN 8, KOF XV, Smash
+// Ultimate and others silently vanished from the site. Found by the daily
+// tournament reality check (2026-11-14). 100 covers the largest majors and
+// stays under start.gg's query-complexity limit for every query using it.
+const EVENTS_LIMIT = 100;
+
+module.exports = { startgg, EVENTS_LIMIT };

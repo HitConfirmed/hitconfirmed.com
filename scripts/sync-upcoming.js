@@ -18,7 +18,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const db = require('../db/db');
-const { startgg } = require('../startggClient');
+const { startgg, EVENTS_LIMIT } = require('../startggClient');
 const { fieldProbabilities } = require('../liveOdds');
 const { applyFuturesMetaSchema, upsertEntrantCount, upsertTournamentGame } = require('../futuresMeta');
 const { findOrCreatePlayerId } = require('./lib/players');
@@ -188,7 +188,7 @@ query Entrants($slug: String!, $ids: [ID]) {
   tournament(slug: $slug) {
     id name slug startAt city countryCode
     images { type url }
-    events(limit: 20, filter: { videogameId: $ids }) {
+    events(limit: ${EVENTS_LIMIT}, filter: { videogameId: $ids }) {
       id name numEntrants videogame { id name }
       phases {
         id phaseOrder
@@ -420,7 +420,7 @@ async function getTrackedGameIds() {
 // (normalized) name. Only queried when such games exist.
 const TOURNAMENT_EVENT_GAMES = `
 query EventGames($slug: String!) {
-  tournament(slug: $slug) { events(limit: 60) { videogame { id name } } }
+  tournament(slug: $slug) { events(limit: ${EVENTS_LIMIT}) { videogame { id name } } }
 }`;
 async function linkPendingGames(slug, trackedIds) {
   let pending;
