@@ -223,3 +223,25 @@ test('finds the start.gg page of a Liquipedia placeholder outside BRANDS (by slu
   // A slug hit skips the name search.
   assert.ok(!calls.some((v) => v.name === 'Astral Finish 2026'));
 });
+
+test('placeholder lookup picks the main event over same-dates companion pages', async () => {
+  await db.runAsync(`INSERT INTO tournaments (name, date, city, country, liquipedia_page) VALUES
+    ('Holiday Matsuri 2026', '2026-12-18', 'Orlando, FL', '', 'Holiday Matsuri 2026')`);
+  const at = (d) => Date.parse(d) / 1000;
+  const query = async (q, v) => {
+    if (v.slug) return { tournament: null }; // force the name-search path
+    if (v.name === 'Holiday Matsuri 2026') {
+      return { tournaments: { nodes: [
+        // Listed first by start.gg, same dates, passes the name check - must lose.
+        { id: 7, name: 'Holiday Matsuri 2026 Side Events', slug: 'tournament/holiday-matsuri-2026-side-events', startAt: at('2026-12-18T15:00:00Z') },
+        { id: 8, name: 'Pre-Holiday Matsuri 2026', slug: 'tournament/pre-holiday-matsuri-2026', startAt: at('2026-12-17T23:00:00Z') },
+        { id: 9, name: 'Holiday Matsuri 2026', slug: 'tournament/holiday-matsuri-2026-main', startAt: at('2026-12-18T15:00:00Z') },
+      ] } };
+    }
+    return { tournaments: { nodes: [] } };
+  };
+  const found = await su.findPlaceholderSlugs(query);
+  assert.ok(found.has('tournament/holiday-matsuri-2026-main'));
+  assert.ok(!found.has('tournament/holiday-matsuri-2026-side-events'));
+  assert.ok(!found.has('tournament/pre-holiday-matsuri-2026'));
+});

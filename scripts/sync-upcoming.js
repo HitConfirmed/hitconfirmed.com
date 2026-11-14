@@ -495,6 +495,7 @@ async function findBrandTournaments(query, after, before, ids = GAME_IDS) {
 // by slug guessed from its name, then by name search around its date, and
 // accept only the same event (sameEventName) starting within 3 days.
 const PLACEHOLDER_MATCH_DAYS = 3;
+const COMPANION_PAGE = /\b(side[\s-]?(events?|tourneys?|tournaments?|brackets?)|community tournaments?|pending approval|pre-?locals?|amateur|redemption)\b|^pre[\s-]/i;
 const TOURNAMENT_BY_SLUG = `
 query BySlug($slug: String!) { tournament(slug: $slug) { id name slug startAt } }`;
 const NAME_NEAR_DATE = `
@@ -532,7 +533,13 @@ async function findPlaceholderSlugs(query = gql) {
         const data = await query(NAME_NEAR_DATE, {
           name: p.name, after: day - PLACEHOLDER_MATCH_DAYS * 86400, before: day + (PLACEHOLDER_MATCH_DAYS + 1) * 86400,
         });
-        hit = (data?.tournaments?.nodes || []).find(isMatch) || null;
+        // Big events often have companion pages on the same dates ("... Side
+        // Events", "... Community Tournaments", "Pre-...") that pass the name
+        // check too. Skip those, and prefer the closest (shortest) name so the
+        // main event wins regardless of start.gg's result order.
+        hit = (data?.tournaments?.nodes || [])
+          .filter((t) => isMatch(t) && !COMPANION_PAGE.test(t.name))
+          .sort((a, b) => a.name.length - b.name.length)[0] || null;
       }
     } catch (err) {
       console.error(`[sync-upcoming] start.gg lookup for placeholder "${p.name}" failed: ${err.message}`);
