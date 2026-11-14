@@ -780,6 +780,94 @@ app.get('/api/live/upcoming', async (req, res) => {
   }
 });
 
+// ---- Team leagues (Street Fighter League etc.) ----
+// Read-only season data is public; picks need auth. See leagues/markets.js.
+const leagueMarkets = require('./leagues/markets');
+
+app.get('/api/leagues', async (req, res) => {
+  try {
+    res.json(await leagueMarkets.listSeasons());
+  } catch (err) {
+    console.error('Error listing leagues:', err.message);
+    res.status(500).json({ error: 'Failed to load leagues' });
+  }
+});
+
+app.get('/api/leagues/team-logo/:id', async (req, res) => {
+  try {
+    const row = await db.getAsync('SELECT content_type, data FROM league_team_logos WHERE team_id = ?', [Number(req.params.id)]);
+    if (!row || !row.data) return res.status(404).end();
+    res.set('Content-Type', row.content_type);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.send(row.data);
+  } catch (err) {
+    res.status(500).end();
+  }
+});
+
+app.get('/api/leagues/bets', requireAuth, async (req, res) => {
+  try {
+    res.json(await leagueMarkets.getUserBets(req.userId));
+  } catch (err) {
+    console.error('Error fetching league picks:', err.message);
+    res.status(500).json({ error: 'Failed to load picks' });
+  }
+});
+
+app.post('/api/leagues/bets', requireAuth, async (req, res) => {
+  const { marketId, teamId, amountCents } = req.body || {};
+  if (!marketId || !teamId || amountCents === undefined) {
+    return res.status(400).json({ error: 'marketId, teamId, amountCents are required' });
+  }
+  try {
+    const result = await leagueMarkets.placeBet({
+      userId: Number(req.userId), marketId: Number(marketId), teamId: Number(teamId), amountCents: Number(amountCents),
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    const map = {
+      INSUFFICIENT_FUNDS: [402, 'Insufficient Fight Money'],
+      MARKET_CLOSED: [409, 'Picks for this match are locked'],
+      NOT_FOUND: [404, 'Market not found'],
+      BAD_TEAM: [400, 'Team is not in this match'],
+      BAD_AMOUNT: [400, 'Invalid pick amount'],
+      BELOW_MIN: [400, err.message],
+      ABOVE_CAP: [400, err.message],
+    };
+    const [code, msg] = map[err.code] || [500, 'Failed to place pick'];
+    if (code === 500) console.error('Error placing league pick:', err.message);
+    res.status(code).json({ error: msg });
+  }
+});
+
+app.delete('/api/leagues/bets/:id', requireAuth, async (req, res) => {
+  try {
+    res.json(await leagueMarkets.cancelBet(Number(req.userId), Number(req.params.id)));
+  } catch (err) {
+    const map = {
+      NOT_FOUND: [404, 'Pick not found'],
+      FORBIDDEN: [403, 'Not your pick'],
+      NOT_CANCELLABLE: [409, 'Pick has already been settled or refunded'],
+      MARKET_LOCKED: [409, 'This match is locked'],
+    };
+    const [code, msg] = map[err.code] || [500, 'Failed to cancel pick'];
+    if (code === 500) console.error('Error cancelling league pick:', err.message);
+    res.status(code).json({ error: msg });
+  }
+});
+
+app.get('/api/leagues/:slug', async (req, res) => {
+  try {
+    const season = await leagueMarkets.getSeason(String(req.params.slug));
+    if (!season) return res.status(404).json({ error: 'League not found' });
+    res.json(season);
+  } catch (err) {
+    console.error('Error loading league:', err.message);
+    res.status(500).json({ error: 'Failed to load league' });
+  }
+});
+
 // ---- Follow a competitor ----
 // Scoped to players already present from start.gg entrant/set ingestion —
 // no arbitrary-name follow flow.
@@ -1226,6 +1314,45 @@ function scheduleManualEventAutoSync() {
   })();
 }
 
+// Team leagues (leagues/sync.js): Liquipedia only, no start.gg token needed.
+// Every 3h - results land on Liquipedia hours after a league night, and each
+// season costs 2-3 rate-limited (30s) requests. Finished seasons skip
+// themselves to once a day. Same restart-safe app_state pattern as above.
+function scheduleLeagueSync() {
+  const { syncAllLeagues } = require('./leagues/sync');
+  const CHECK_MS = 3 * 60 * 60 * 1000;
+  const LAST_RUN_KEY = 'last_league_sync_at';
+  const attempt = async () => {
+    try {
+      await syncAllLeagues();
+    } catch (err) {
+      console.error('League sync failed:', err.message);
+    }
+    try {
+      await db.runAsync(
+        `INSERT INTO app_state (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        [LAST_RUN_KEY, new Date().toISOString()]
+      );
+    } catch (err) {
+      console.error(`Failed to record ${LAST_RUN_KEY}:`, err.message);
+    }
+    setTimeout(attempt, CHECK_MS);
+  };
+  (async () => {
+    let lastRun = null;
+    try {
+      const row = await db.getAsync('SELECT value FROM app_state WHERE key = ?', [LAST_RUN_KEY]);
+      lastRun = row ? new Date(row.value).getTime() : null;
+    } catch (err) {
+      console.error(`Failed to read ${LAST_RUN_KEY}:`, err.message);
+    }
+    const elapsed = lastRun ? Date.now() - lastRun : Infinity;
+    const initialDelay = elapsed >= CHECK_MS ? 0 : CHECK_MS - elapsed;
+    setTimeout(attempt, initialDelay);
+  })();
+}
+
 // Live poller: refresh Top 8 markets for active tournaments. Cheap when nothing
 // is live (one local query, no Start.gg call). Default 60s — Start.gg rate-limits
 // (429) below this; LIVE_SYNC_MS can override but lower values risk throttling.
@@ -1282,6 +1409,7 @@ if (!process.env.DISABLE_SYNC) {
   scheduleStaleMarketReconcile();
   scheduleManualEventAutoSync();
   scheduleStuckTournamentDiagnostic();
+  scheduleLeagueSync();
 }
 
 // Catch-all route for React

@@ -51,7 +51,28 @@ function fail(msg) {
   throw new Error(msg);
 }
 
+// Liquipedia's API terms limit action=parse to one request per 30 seconds.
+// Several schedulers in the one server process call it (upcoming events,
+// manual EWC results, team leagues), each pacing only its OWN requests - so
+// two running at once could still break the limit. This process-wide gate
+// serializes every parse call. Callers that already sleep 31s between their
+// own requests never wait here.
+// Overridable only so tests that stub global.fetch don't sit through real waits.
+const PARSE_MIN_GAP_MS = Number(process.env.LIQUIPEDIA_PARSE_GAP_MS ?? 31000);
+let parseGate = Promise.resolve();
+let lastParseAt = 0;
+function throttleParse() {
+  const turn = parseGate.then(async () => {
+    const wait = lastParseAt + PARSE_MIN_GAP_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastParseAt = Date.now();
+  });
+  parseGate = turn.catch(() => {});
+  return turn;
+}
+
 async function fetchPageHtml(pagePath) {
+  await throttleParse();
   const url = `${WIKI_API}?action=parse&page=${encodeURIComponent(pagePath)}&format=json&prop=text`;
   // Liquipedia's API rejects requests that don't advertise gzip support
   // (see liquipedia.net/api-terms-of-use) - fetch() handles decoding
@@ -72,6 +93,7 @@ async function fetchPageHtml(pagePath) {
 // template. The rendered bracket HTML never carries this since {{ShowBracket}}
 // resolves to match data only, not the page's own infobox metadata.
 async function fetchPageWikitext(pagePath) {
+  await throttleParse();
   const url = `${WIKI_API}?action=parse&page=${encodeURIComponent(pagePath)}&format=json&prop=wikitext`;
   const res = await fetch(url, {
     headers: { 'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip' },

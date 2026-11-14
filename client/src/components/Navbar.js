@@ -31,6 +31,9 @@ const IconBracket = (
     <line x1="12" y1="12" x2="21" y2="12" />
   </svg>
 );
+const IconLeagues = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-3-3.87" /><path d="M7 21v-2a4 4 0 0 1 3-3.87" /><circle cx="12" cy="8" r="3" /><circle cx="5" cy="10" r="2" /><circle cx="19" cy="10" r="2" /></svg>
+);
 const IconRanks = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="20" x2="6" y2="14" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="10" /></svg>
 );
@@ -46,6 +49,7 @@ const IconFollow = (
 const NAV = [
   { to: '/', label: 'Home', end: true, icon: IconHome },
   { to: '/tournaments', label: 'Tournaments', icon: IconBracket, live: true },
+  { to: '/leagues', label: 'Leagues', icon: IconLeagues },
   { to: '/leaderboard', label: 'Ranks', icon: IconRanks },
   { to: '/profile', label: 'Picks', icon: IconPicks },
   { to: '/follow', label: 'Follow', icon: IconFollow },

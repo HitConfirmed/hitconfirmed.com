@@ -388,6 +388,100 @@ db.diagnosePreviewOnlyGames = function diagnosePreviewOnlyGames(logPrefix = '[bo
 };
 db.diagnosePreviewOnlyGames();
 
+// Team leagues (Street Fighter League etc.): seasons, teams, team-vs-team
+// matches and their match-winner betting pools, synced from Liquipedia by
+// leagues/sync.js. Kept entirely separate from the player-centric tables
+// (tournaments / players / set_markets / set_bets): a team is not a player
+// and a league week is not a bracket set. Same no-FOREIGN-KEY convention as
+// the tables above.
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS league_seasons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      short_name TEXT,
+      region TEXT,
+      game_name TEXT,
+      liquipedia_page TEXT NOT NULL,
+      start_date TEXT,
+      end_date TEXT,
+      synced_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS league_teams (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_id INTEGER NOT NULL,
+      lp_key TEXT NOT NULL,
+      name TEXT NOT NULL,
+      short_name TEXT,
+      division TEXT,
+      logo_source_url TEXT,
+      roster_json TEXT,
+      UNIQUE (season_id, lp_key)
+    );
+    CREATE TABLE IF NOT EXISTS league_team_logos (
+      team_id INTEGER PRIMARY KEY,
+      source_url TEXT,
+      content_type TEXT,
+      data BLOB
+    );
+    CREATE TABLE IF NOT EXISTS league_matches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_id INTEGER NOT NULL,
+      match_key TEXT NOT NULL UNIQUE,
+      stage TEXT,
+      round_label TEXT,
+      division TEXT,
+      sort_order INTEGER,
+      match_date TEXT,
+      lock_at TEXT,
+      best_of TEXT,
+      team1_id INTEGER,
+      team2_id INTEGER,
+      team1_score INTEGER,
+      team2_score INTEGER,
+      winner_team_id INTEGER,
+      finished INTEGER NOT NULL DEFAULT 0,
+      sets_json TEXT,
+      last_seen_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_league_matches_season ON league_matches(season_id, sort_order);
+    CREATE TABLE IF NOT EXISTS league_markets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      match_id INTEGER NOT NULL,
+      team1_id INTEGER NOT NULL,
+      team2_id INTEGER NOT NULL,
+      state TEXT NOT NULL DEFAULT 'open',
+      p1_prob REAL NOT NULL,
+      p2_prob REAL NOT NULL,
+      seed_k_cents INTEGER NOT NULL DEFAULT 0,
+      p1_pool_cents INTEGER NOT NULL DEFAULT 0,
+      p2_pool_cents INTEGER NOT NULL DEFAULT 0,
+      p1_live_odds REAL NOT NULL,
+      p2_live_odds REAL NOT NULL,
+      winner_team_id INTEGER,
+      opened_at TEXT NOT NULL DEFAULT (datetime('now')),
+      closed_at TEXT,
+      settled_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_league_markets_match ON league_markets(match_id);
+    CREATE TABLE IF NOT EXISTS league_bets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      market_id INTEGER NOT NULL,
+      picked_team_id INTEGER NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      locked_odds REAL NOT NULL,
+      state TEXT NOT NULL DEFAULT 'placed',
+      payout_cents INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_league_bets_user ON league_bets(user_id);
+    CREATE INDEX IF NOT EXISTS idx_league_bets_market ON league_bets(market_id);
+    CREATE INDEX IF NOT EXISTS idx_league_bets_state ON league_bets(state);
+  `);
+} catch (e) { console.error('[boot] league tables setup failed:', e.message); }
+
 // Cache prepared statements by SQL text. SQLite auto-reprepares on schema
 // changes, so cached statements stay valid across migrations.
 const stmtCache = new Map();

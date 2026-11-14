@@ -101,7 +101,18 @@ async function houseBankrollCents() {
     `SELECT COALESCE(SUM(amount_cents), 0) - COALESCE(SUM(payout_cents), 0) AS net
      FROM set_bets WHERE state IN ('won', 'lost')`
   );
-  _bankrollCache = HOUSE_PROMO_SEED_CENTS + (row?.net || 0);
+  // Team-league bets (leagues/markets.js) draw on the same house bankroll, so
+  // their settled take counts here too. league_bets is created at boot by
+  // db/db.js; the catch only covers a partial test schema.
+  let leagueNet = 0;
+  try {
+    const lr = await db.getAsync(
+      `SELECT COALESCE(SUM(amount_cents), 0) - COALESCE(SUM(payout_cents), 0) AS net
+       FROM league_bets WHERE state IN ('won', 'lost')`
+    );
+    leagueNet = lr?.net || 0;
+  } catch (_) { /* no league_bets table */ }
+  _bankrollCache = HOUSE_PROMO_SEED_CENTS + (row?.net || 0) + leagueNet;
   return _bankrollCache;
 }
 

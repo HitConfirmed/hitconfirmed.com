@@ -14,6 +14,7 @@ const realFetch = global.fetch;
 before(async () => {
   file = path.join(os.tmpdir(), `mm-autosync-${process.pid}-${Math.random().toString(36).slice(2)}.db`);
   process.env.DATABASE_PATH = file;
+  process.env.LIQUIPEDIA_PARSE_GAP_MS = '0'; // global.fetch is stubbed - no real rate limit to respect
   for (const m of ['../../db/db', '../../scripts/auto-sync-manual-events', '../../scripts/ingest-manual-results', '../../scripts/fetch-liquipedia-bracket']) {
     delete require.cache[require.resolve(m)];
   }

@@ -12,6 +12,7 @@ import Leaderboard from './components/Leaderboard';
 import Profile from './components/Profile';
 import AccountSettings from './components/AccountSettings';
 import Follow from './components/Follow';
+import Leagues from './components/Leagues';
 
 // Inner shell so we can read the current route (useLocation must be inside
 // <Router>) and hide the navbar on the auth screens, per the redesign.
@@ -36,6 +37,7 @@ function AppShell({ isLoggedIn, setIsLoggedIn }) {
         <Route path="/brackets" element={<Navigate to="/tournaments" replace />} />
         <Route path="/future-tournaments" element={<Navigate to="/tournaments" replace />} />
         <Route path="/past-results" element={<Navigate to="/tournaments" replace />} />
+        <Route path="/leagues" element={<Leagues isLoggedIn={isLoggedIn} />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/profile" element={isLoggedIn ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/follow" element={isLoggedIn ? <Follow /> : <Navigate to="/login" />} />
