@@ -2,7 +2,7 @@
 #
 # Two environments, each one always-on Web Service + its own persistent disk
 # holding its own SQLite file:
-#   - hit-confirmed       TEST site  (hit-confirmed.onrender.com) <- `testing` branch
+#   - hit-confirmed-test  TEST site  (hit-confirmed.onrender.com) <- `testing` branch
 #   - hit-confirmed-prod  OFFICIAL   (hitconfirmed.com)            <- `main` branch
 # Ship to the official site by merging `testing` into `main`.
 #
@@ -18,7 +18,7 @@
 # never eat into the official site's start.gg rate limit.
 services:
   - type: web
-    name: hit-confirmed
+    name: hit-confirmed-test
     runtime: node
     plan: starter            # $7/mo always-on (free tier sleeps + has no disk)
     region: ohio             # US-East, closest to Ontario
