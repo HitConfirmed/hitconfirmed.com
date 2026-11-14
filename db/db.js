@@ -13,8 +13,12 @@ const dbPath = path.resolve(process.env.DATABASE_PATH || './database.db');
 const fs = require('fs');
 const seedPath = `${dbPath}.seed`;
 if (fs.existsSync(seedPath)) {
-  for (const ext of ['-wal', '-shm']) {
-    try { fs.unlinkSync(`${dbPath}${ext}`); } catch (_) { /* nothing to clear */ }
+  // Keep the replaced DB (with its WAL/SHM, so no recent writes are lost) as
+  // "<dbPath>.prev" for one-step rollback - e.g. the test site's weekly prod
+  // snapshot (scripts/db-snapshot.js) lands here.
+  for (const ext of ['', '-wal', '-shm']) {
+    try { fs.unlinkSync(`${dbPath}.prev${ext}`); } catch (_) { /* no older backup */ }
+    try { fs.renameSync(`${dbPath}${ext}`, `${dbPath}.prev${ext}`); } catch (_) { /* nothing to keep */ }
   }
   fs.renameSync(seedPath, dbPath);
   console.log(`Seeded database from ${seedPath}`);

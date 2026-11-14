@@ -1320,6 +1320,34 @@ economy.applyEconomySchema()
       console.log(`Server running on http://localhost:${PORT}`);
     });
 
+    // Weekly prod -> test DB copy (scripts/db-snapshot.js). The official site
+    // serves snapshots on a private-network-only port; the test site pulls one
+    // every Monday 4 AM Toronto time. Each side only activates when its own
+    // env vars are set, so local dev and the other service are unaffected.
+    const snapshot = require('./scripts/db-snapshot');
+    if (process.env.DB_SNAPSHOT_PORT && process.env.DB_SNAPSHOT_SECRET) {
+      try {
+        snapshot.startSnapshotServer({ db, port: Number(process.env.DB_SNAPSHOT_PORT), secret: process.env.DB_SNAPSHOT_SECRET });
+      } catch (err) { console.error('[db-snapshot] server not started:', err.message); }
+    }
+    if (process.env.DB_SNAPSHOT_SOURCE && process.env.DB_SNAPSHOT_SECRET) {
+      snapshot.scheduleWeeklyProdSnapshot({
+        url: process.env.DB_SNAPSHOT_SOURCE,
+        secret: process.env.DB_SNAPSHOT_SECRET,
+        dbPath: path.resolve(process.env.DATABASE_PATH || './database.db'),
+        keepEmails: String(process.env.DB_SNAPSHOT_KEEP_EMAILS || '').split(','),
+        // Close the DB cleanly, then exit non-zero so Render restarts the
+        // service and db/db.js swaps the downloaded .seed in on boot.
+        exit: (code) => {
+          server.close(async () => {
+            try { await db.closeAsync(); } catch (_) { /* already closed */ }
+            process.exit(code);
+          });
+          setTimeout(() => process.exit(code), 10000).unref(); // don't hang on a slow connection
+        },
+      });
+    }
+
     // Graceful shutdown. Managed hosts (Render) and systemd send SIGTERM on every
     // deploy/restart; stop accepting connections, then close the single SQLite
     // writer so WAL is checkpointed cleanly (no torn writes / corruption).
