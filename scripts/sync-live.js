@@ -192,6 +192,23 @@ function isSideEvent(name) {
   return /side\s+event|community\s+event|tekken\s+ball/i.test(name || '');
 }
 
+// Doubles / 2v2 / team events run alongside the singles bracket for the same
+// game are a second bracket under the same (tournament, game) key - the same
+// tangle as a side event. Real case: Port Priority DX ran "Rivals of Aether II
+// Doubles" (24 teams) and "Rivals of Aether II Singles"; Doubles started first
+// and was shown as THE Rivals bracket (team names like "Mr. Nice Guy /
+// elkiies"), with Singles about to merge into it. A team-format event is only
+// skipped when the same game also has a non-team event - games that are
+// natively team-based (2XKO duos) with no singles bracket still get tracked.
+const TEAM_FORMAT_RE = /\b(doubles|2v2|3v3|duos?|teams?|crews?)\b/i;
+const isTeamFormat = (name) => TEAM_FORMAT_RE.test(name || '') && !/\bsingles\b/i.test(name || '');
+function isSecondaryTeamEvent(ev, allEvents) {
+  if (!isTeamFormat(ev?.name)) return false;
+  const vg = ev.videogame?.id;
+  return (allEvents || []).some((o) => o !== ev && o.videogame?.id === vg
+    && !isTeamFormat(o.name) && !isSideEvent(o.name));
+}
+
 // Resolves an event's TRUE final phase. Start.gg's own phaseOrder doesn't
 // always track chronological/structural order — a later-created "Top 16"
 // consolidation phase can end up with a HIGHER phaseOrder than the phase
@@ -681,7 +698,7 @@ async function fetchActiveEvents(startggId, events = null, tournamentId = null) 
   const evs = events ?? (await fetchTournamentEvents(startggId));
   const out = [];
   for (const ev of evs) {
-    if (isSideEvent(ev.name)) continue;
+    if (isSideEvent(ev.name) || isSecondaryTeamEvent(ev, evs)) continue;
     if (await isGameFullyResolved(tournamentId, ev.videogame?.id)) continue;
     const phases = ev.phases || [];
     if (phases.length === 0) continue;
@@ -717,7 +734,7 @@ async function fetchHistoryPhases(startggId, events = null, tournamentId = null)
   const evs = events ?? (await fetchTournamentEvents(startggId));
   const out = [];
   for (const ev of evs) {
-    if (isSideEvent(ev.name)) continue;
+    if (isSideEvent(ev.name) || isSecondaryTeamEvent(ev, evs)) continue;
     if (await isGameFullyResolved(tournamentId, ev.videogame?.id)) continue;
     const phases = ev.phases || [];
     if (phases.length < 2) continue; // nothing before the final phase to track
@@ -930,7 +947,7 @@ async function syncLive({ all = false, tournamentIds = null } = {}) {
 
 module.exports = {
   syncLive, processTournamentEvents, fetchActiveEvents, selectTop8Sets, isTop8Round,
-  isPoolsPhase, isSideEvent, isGameFullyResolved, resolveFinalPhase, classifyRoundStatus, groupSetsIntoRounds, fetchHistoryPhases, processHistorySets,
+  isPoolsPhase, isSideEvent, isSecondaryTeamEvent, isGameFullyResolved, resolveFinalPhase, classifyRoundStatus, groupSetsIntoRounds, fetchHistoryPhases, processHistorySets,
   getActiveTournaments, reconcileStaleMarkets, reconcileOneStaleMarket,
 };
 

@@ -251,3 +251,25 @@ test('processHistorySets does not bump updated_at when re-writing an unchanged r
   const after = await db.getAsync(`SELECT updated_at FROM bracket_history WHERE startgg_set_id = 'stuck-pool-set'`);
   assert.equal(after.updated_at, before.updated_at, 'a no-op re-write must not reset the staleness clock');
 });
+
+
+test('a doubles/2v2 event is skipped when the same game also has a singles event', () => {
+  // Real case: Port Priority DX - "Rivals of Aether II Doubles" started before
+  // "Rivals of Aether II Singles" and was tracked as THE Rivals bracket.
+  const roa = { id: 33602 }, melee = { id: 1 }, xko = { id: 64423 };
+  const evs = [
+    { name: 'Rivals of Aether II Doubles', videogame: roa },
+    { name: 'Rivals of Aether II Singles', videogame: roa },
+    { name: 'Melee Doubles', videogame: melee },
+    { name: 'Melee Singles', videogame: melee },
+    { name: 'TEKKEN 8 2v2 Waseda Team Tournament', videogame: { id: 49783 } },
+    { name: 'TEKKEN 8', videogame: { id: 49783 } },
+    // Natively team-based game with no singles bracket: still tracked.
+    { name: '2XKO Duos', videogame: xko },
+  ];
+  const skipped = evs.filter((e) => syncLive.isSecondaryTeamEvent(e, evs)).map((e) => e.name);
+  assert.deepEqual(skipped, ['Rivals of Aether II Doubles', 'Melee Doubles', 'TEKKEN 8 2v2 Waseda Team Tournament']);
+  // "singles and duos" mixed-mode events are not team-only.
+  assert.equal(syncLive.isSecondaryTeamEvent({ name: '2XKO mixed mode (singles and duos)', videogame: xko },
+    [{ name: '2XKO mixed mode (singles and duos)', videogame: xko }, { name: '2XKO Singles', videogame: xko }]), false);
+});
