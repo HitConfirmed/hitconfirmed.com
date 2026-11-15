@@ -88,17 +88,51 @@ async function syncTeamLogos(seasonId, fetchImage, imageGapMs) {
 }
 
 // ---- player photos --------------------------------------------------------
-// Each rostered player's Liquipedia infobox photo, stored locally (like team
-// logos) so the page never hotlinks Liquipedia. Two batched API queries per
-// season (wikitext -> "|image=" file name, then imageinfo -> a thumbnail URL),
-// spaced to Liquipedia's 1-request-per-2s limit for non-parse API calls.
-// A player is re-checked weekly, so a new photo shows up within a week.
+// Each rostered player's photo, stored in league_player_photos (keyed by their
+// Liquipedia page, so every league/season shares it) and served locally - the
+// page never hotlinks anyone.
+//
+// Sources, in order:
+//  1. the Liquipedia infobox photo (two batched wiki API queries per season:
+//     wikitext -> "|image=" file, then imageinfo -> a 160px thumbnail), spaced
+//     to Liquipedia's 1-request-per-2s limit for non-parse API calls;
+//  2. the player's start.gg profile picture, via the "|startgg=" id on the same
+//     infobox (one batched start.gg query), shrunk to a 160px square.
+//
+// KEEP WHAT WE FIND: once a player has a photo it is never re-fetched,
+// replaced or deleted by the sync - only players still without one are
+// re-checked, weekly.
 const LP_API = 'https://liquipedia.net/fighters/api.php';
 const API_GAP_MS = 2000;
 const PHOTO_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 const PHOTO_WIDTH = 160;
 const PHOTO_MAX_BYTES = 512 * 1024;
+const RAW_MAX_BYTES = 15 * 1024 * 1024; // start.gg originals can be several MB before shrinking
 const API_BATCH = 50;
+
+// start.gg profile pictures for many user ids in one request (aliased fields).
+// ids are validated hex (infoboxStartgg), so inlining them is safe.
+async function startggProfileImages(ids) {
+  const { startgg } = require('../startggClient');
+  const fields = ids.map((id, i) => `u${i}: user(slug: "user/${id}") { images { url type } }`).join('\n');
+  const data = await startgg(`query { ${fields} }`);
+  const out = new Map();
+  ids.forEach((id, i) => {
+    const img = (data?.[`u${i}`]?.images || []).find((x) => x.type === 'profile');
+    if (img?.url) out.set(id, img.url);
+  });
+  return out;
+}
+
+// Center-crop to a PHOTO_WIDTH square JPEG on the app's dark card colour
+// (so transparent PNG avatars don't turn black).
+async function shrinkToSquare(buf) {
+  const Jimp = require('jimp');
+  const img = await Jimp.read(buf);
+  img.cover(PHOTO_WIDTH, PHOTO_WIDTH);
+  const out = new Jimp(PHOTO_WIDTH, PHOTO_WIDTH, 0x151821ff).composite(img, 0, 0).quality(85);
+  return { contentType: 'image/jpeg', data: await out.getBufferAsync(Jimp.MIME_JPEG) };
+}
 
 async function liquipediaQuery(params) {
   const url = `${LP_API}?${new URLSearchParams({ action: 'query', format: 'json', ...params })}`;
@@ -110,11 +144,22 @@ async function liquipediaQuery(params) {
 // MediaWiki title form: underscores are spaces, first letter upper-case.
 const wikiTitle = (s) => { const t = String(s).replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
 
+// One "|key=value" line of a player infobox (HTML comments stripped).
+function infoboxField(wikitext, key) {
+  const m = new RegExp(`^\\s*\\|\\s*${key}\\s*=\\s*([^|\\n}]*?)\\s*$`, 'm').exec(wikitext || '');
+  return m ? m[1].replace(/<!--.*?-->/g, '').trim() || null : null;
+}
+
 // "|image=AngryBird EWC 2025.jpg" from a player page's infobox.
 function infoboxImage(wikitext) {
-  const m = /^\s*\|\s*image\s*=\s*([^|\n}]*?)\s*$/m.exec(wikitext || '');
-  const file = m && m[1].replace(/^(file|image):/i, '').trim();
+  const file = infoboxField(wikitext, 'image')?.replace(/^(file|image):/i, '').trim();
   return file ? wikiTitle(file) : null;
+}
+
+// "|startgg=c921a066" - the player's start.gg user id.
+function infoboxStartgg(wikitext) {
+  const id = infoboxField(wikitext, 'startgg');
+  return id && /^[0-9a-f]{6,16}$/i.test(id) ? id.toLowerCase() : null;
 }
 
 // Follows MediaWiki's normalized + redirects chains back to what we asked for.
@@ -129,38 +174,59 @@ function resolveTitles(query, requested) {
   return out;
 }
 
-async function syncPlayerPhotos(seasonId, { query = liquipediaQuery, fetchImage = fetchLiquipediaImage, apiGapMs = API_GAP_MS, imageGapMs = IMAGE_GAP_MS, now = Date.now() } = {}) {
+async function syncPlayerPhotos(seasonId, {
+  query = liquipediaQuery, startggImages = startggProfileImages, shrink = shrinkToSquare,
+  fetchImage = fetchLiquipediaImage, apiGapMs = API_GAP_MS, imageGapMs = IMAGE_GAP_MS, now = Date.now(),
+} = {}) {
   const teams = await db.allAsync('SELECT roster_json FROM league_teams WHERE season_id = ? AND roster_json IS NOT NULL', [seasonId]);
   const pages = new Set();
   for (const t of teams) for (const p of JSON.parse(t.roster_json).players || []) if (p.page) pages.add(p.page);
-  const known = new Map((await db.allAsync('SELECT page, source_url, data IS NOT NULL AS has_data, checked_at FROM league_player_photos'))
+  const known = new Map((await db.allAsync('SELECT page, data IS NOT NULL AS has_data, checked_at FROM league_player_photos'))
     .map((r) => [r.page, r]));
-  const due = [...pages].filter((p) => { const r = known.get(p); return !r || !r.checked_at || now - Date.parse(r.checked_at) >= PHOTO_RECHECK_MS; });
-  const stats = { checked: 0, downloaded: 0, none: 0, failed: 0 };
+  // Players we already have a photo for are done for good.
+  const due = [...pages].filter((p) => {
+    const r = known.get(p);
+    return !r || (!r.has_data && (!r.checked_at || now - Date.parse(r.checked_at) >= PHOTO_RECHECK_MS));
+  });
+  const stats = { checked: 0, downloaded: 0, fromStartgg: 0, none: 0, failed: 0 };
   const checkedAt = new Date(now).toISOString();
 
   for (let i = 0; i < due.length; i += API_BATCH) {
     const batch = due.slice(i, i + API_BATCH);
-    let fileOf; let thumbOf;
+    const source = new Map(); // page -> { url, file, startgg }
     try {
       const q1 = await query({ prop: 'revisions', rvprop: 'content', rvslots: 'main', redirects: '1', titles: batch.join('|') });
       const titleOf = resolveTitles(q1.query, batch);
       const textOf = new Map(Object.values(q1.query?.pages || {}).map((p) => [p.title, p.revisions?.[0]?.slots?.main?.['*'] || '']));
-      fileOf = new Map(batch.map((p) => [p, infoboxImage(textOf.get(titleOf.get(p)))]));
+      const fileOf = new Map(batch.map((p) => [p, infoboxImage(textOf.get(titleOf.get(p)))]));
+      const sggOf = new Map(batch.map((p) => [p, infoboxStartgg(textOf.get(titleOf.get(p)))]));
       const files = [...new Set([...fileOf.values()].filter(Boolean))];
-      thumbOf = new Map();
       if (files.length) {
         await sleep(apiGapMs);
         const fileTitles = files.map((f) => `File:${f}`);
         const q2 = await query({ prop: 'imageinfo', iiprop: 'url|mime', iiurlwidth: String(PHOTO_WIDTH), titles: fileTitles.join('|') });
         const ftitleOf = resolveTitles(q2.query, fileTitles);
         const infoOf = new Map(Object.values(q2.query?.pages || {}).map((p) => [p.title, p.imageinfo?.[0]]));
-        for (const f of files) {
-          const info = infoOf.get(ftitleOf.get(`File:${f}`));
-          if (info && /^image\//.test(info.mime || '')) thumbOf.set(f, info.thumburl || info.url);
+        for (const page of batch) {
+          const f = fileOf.get(page);
+          const info = f && infoOf.get(ftitleOf.get(`File:${f}`));
+          if (info && /^image\//.test(info.mime || '')) source.set(page, { url: info.thumburl || info.url, file: f });
         }
       }
       await sleep(apiGapMs);
+      // Fallback: the start.gg profile picture for whoever the wiki has no photo of.
+      const sggPages = batch.filter((p) => !source.has(p) && sggOf.get(p));
+      if (sggPages.length) {
+        try {
+          const urlOf = await startggImages([...new Set(sggPages.map((p) => sggOf.get(p)))]);
+          for (const page of sggPages) {
+            const url = urlOf.get(sggOf.get(page));
+            if (url) source.set(page, { url, file: `startgg:${sggOf.get(page)}`, startgg: true });
+          }
+        } catch (e) {
+          console.error(`[leagues] start.gg photo lookup failed: ${e.message}`);
+        }
+      }
     } catch (e) {
       console.error(`[leagues] player photo lookup failed: ${e.message}`);
       stats.failed += batch.length;
@@ -168,35 +234,33 @@ async function syncPlayerPhotos(seasonId, { query = liquipediaQuery, fetchImage 
     }
 
     for (const page of batch) {
-      const file = fileOf.get(page);
-      const src = file ? thumbOf.get(file) : null;
+      const src = source.get(page);
       stats.checked++;
       if (!src) {
-        // No photo on the wiki (yet): remember that so we don't ask again until the weekly re-check.
+        // Nothing anywhere (yet): note the check so we only look again next week.
+        // Only touches rows WITHOUT a photo - a kept photo is never cleared.
         await db.runAsync(
-          `INSERT INTO league_player_photos (page, file, source_url, content_type, data, checked_at) VALUES (?, NULL, NULL, NULL, NULL, ?)
-           ON CONFLICT(page) DO UPDATE SET file=NULL, source_url=NULL, content_type=NULL, data=NULL, checked_at=excluded.checked_at`,
+          `INSERT INTO league_player_photos (page, checked_at) VALUES (?, ?)
+           ON CONFLICT(page) DO UPDATE SET checked_at = excluded.checked_at WHERE league_player_photos.data IS NULL`,
           [page, checkedAt]);
         stats.none++;
         continue;
       }
-      const prev = known.get(page);
-      if (prev && prev.has_data && prev.source_url === src) {
-        await db.runAsync('UPDATE league_player_photos SET checked_at = ? WHERE page = ?', [checkedAt, page]);
-        continue;
-      }
       try {
-        const img = await fetchImage(src);
+        let img = await fetchImage(src.url);
         if (!/^image\//.test(img.contentType || '')) throw new Error(`not an image (${img.contentType})`);
-        if (img.data.length > PHOTO_MAX_BYTES) throw new Error(`too large (${img.data.length} bytes)`);
+        if (img.data.length > RAW_MAX_BYTES) throw new Error(`too large (${img.data.length} bytes)`);
+        if (src.startgg || img.data.length > PHOTO_MAX_BYTES) img = await shrink(img.data);
+        if (img.data.length > PHOTO_MAX_BYTES) throw new Error(`too large after shrinking (${img.data.length} bytes)`);
         await db.runAsync(
           `INSERT INTO league_player_photos (page, file, source_url, content_type, data, checked_at) VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(page) DO UPDATE SET file=excluded.file, source_url=excluded.source_url, content_type=excluded.content_type,
-             data=excluded.data, checked_at=excluded.checked_at`,
-          [page, file, src, img.contentType, img.data, checkedAt]);
+             data=excluded.data, checked_at=excluded.checked_at WHERE league_player_photos.data IS NULL`,
+          [page, src.file, src.url, img.contentType, img.data, checkedAt]);
         stats.downloaded++;
+        if (src.startgg) stats.fromStartgg++;
       } catch (e) {
-        // Left unchecked so the next run retries it; an older photo (if any) stays.
+        // Left unchecked so the next run retries it.
         console.error(`[leagues] photo for ${page} failed: ${e.message}`);
         stats.failed++;
       } finally {
@@ -343,7 +407,7 @@ async function syncAllLeagues(opts = {}) {
   return results;
 }
 
-module.exports = { syncSeason, syncAllLeagues, lockAtFor, syncPlayerPhotos, infoboxImage };
+module.exports = { syncSeason, syncAllLeagues, lockAtFor, syncPlayerPhotos, infoboxImage, infoboxStartgg, shrinkToSquare };
 
 if (require.main === module) {
   syncAllLeagues().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

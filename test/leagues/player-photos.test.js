@@ -69,7 +69,7 @@ test('infoboxImage reads the image field and normalizes the file name', () => {
 test('downloads photos for rostered players and exposes them on the season', async () => {
   const calls = []; const got = [];
   const stats = await run({ query: fakeApi(calls), fetchImage: fetchImage(got) });
-  assert.deepStrictEqual(stats, { checked: 3, downloaded: 2, none: 1, failed: 0 });
+  assert.deepStrictEqual(stats, { checked: 3, downloaded: 2, fromStartgg: 0, none: 1, failed: 0 });
   assert.strictEqual(calls.length, 2); // one wikitext batch + one imageinfo batch
   assert.ok(!calls[0].titles.includes('Rookie'));
   assert.strictEqual(got.length, 2);
@@ -82,21 +82,52 @@ test('downloads photos for rostered players and exposes them on the season', asy
   assert.strictEqual(byName.Rookie, null);
 });
 
-test('skips players checked within a week; re-checks after, without re-downloading the same photo', async () => {
+test('players with a photo are never looked up again; players without one are re-checked weekly', async () => {
   await run({ query: fakeApi([]), fetchImage: fetchImage([]) });
   const calls = []; const got = [];
   await run({ query: fakeApi(calls), fetchImage: fetchImage(got), now: NOW + 3 * DAY });
   assert.strictEqual(calls.length, 0);
   await run({ query: fakeApi(calls), fetchImage: fetchImage(got), now: NOW + 8 * DAY });
-  assert.strictEqual(calls.length, 2);
+  assert.deepStrictEqual(calls.map((c) => c.titles), ['Phenom']); // only the one still missing
   assert.strictEqual(got.length, 0);
+});
+
+test('a kept photo survives the wiki dropping it', async () => {
+  await run({ query: fakeApi([]), fetchImage: fetchImage([]) });
+  // Simulate a forced re-check where Liquipedia no longer has any photo.
+  await db.runAsync(`UPDATE league_player_photos SET checked_at = NULL`);
+  await db.runAsync(`INSERT INTO league_player_photos (page, checked_at) VALUES ('x', NULL) ON CONFLICT DO NOTHING`);
+  const empty = async () => ({ query: { pages: {} } });
+  await sync.syncPlayerPhotos(1, { query: empty, startggImages: async () => new Map(), apiGapMs: 0, imageGapMs: 0, now: NOW + 30 * DAY });
+  const n = await db.getAsync('SELECT COUNT(*) c FROM league_player_photos WHERE data IS NOT NULL');
+  assert.strictEqual(n.c, 2);
+});
+
+test('falls back to the start.gg profile picture, shrunk', async () => {
+  wikitext.Phenom = '{{Infobox player\n|id=Phenom\n|image=\n|startgg=C921A066\n}}';
+  try {
+    const asked = []; const got = [];
+    const stats = await run({
+      query: fakeApi([]), fetchImage: fetchImage(got),
+      startggImages: async (ids) => { asked.push(...ids); return new Map([['c921a066', 'https://images.start.gg/u.png']]); },
+      shrink: async () => ({ contentType: 'image/jpeg', data: Buffer.from('small') }),
+    });
+    assert.deepStrictEqual(asked, ['c921a066']); // only for the player the wiki had no photo of
+    assert.strictEqual(stats.fromStartgg, 1);
+    assert.strictEqual(stats.none, 0);
+    const row = await db.getAsync(`SELECT file, source_url, content_type, data FROM league_player_photos WHERE page = 'Phenom'`);
+    assert.strictEqual(row.file, 'startgg:c921a066');
+    assert.strictEqual(row.data.toString(), 'small');
+  } finally {
+    wikitext.Phenom = '{{Infobox player\n|id=Phenom\n|image=\n}}';
+  }
 });
 
 test('an API failure keeps existing photos and retries next run', async () => {
   await run({ query: fakeApi([]), fetchImage: fetchImage([]) });
   const failing = async () => { throw new Error('HTTP 429'); };
   const stats = await run({ query: failing, fetchImage: fetchImage([]), now: NOW + 8 * DAY });
-  assert.strictEqual(stats.failed, 3);
+  assert.strictEqual(stats.failed, 1); // only Phenom was due
   const n = await db.getAsync('SELECT COUNT(*) c FROM league_player_photos WHERE data IS NOT NULL');
   assert.strictEqual(n.c, 2);
 });
