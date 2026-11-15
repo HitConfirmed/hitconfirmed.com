@@ -466,3 +466,37 @@ test('unresolvedSetsSql treats a multi-game major as unresolved when one game is
   const active = await sync.getActiveTournaments();
   assert.ok(active.map((t) => t.id).includes(ceoId), 'and getActiveTournaments must keep polling it as a result');
 });
+
+test('processTournamentEvents settles a completed set even when one of its players has an open market in a DIFFERENT game at the same tournament', async () => {
+  // Real case, Astral Finish 2026: "AF SMC | Azor DC" entered both Persona 4
+  // Arena Ultimax and Virtua Fighter 5. Their open P4AU Winners Semi-Final
+  // made fillBracketSlot's stillActive guard (then tournament-wide) refuse to
+  // seat them in any VF5 set, so a VF5 Winners Semi-Final start.gg reported
+  // complete stayed 'pending' with a TBD slot and was never settled.
+  const p4 = (await db.runAsync(`INSERT INTO games (name, startgg_id) VALUES ('Persona 4 Arena Ultimax', 'g-p4')`)).lastID;
+  await db.runAsync(`INSERT INTO games (name, startgg_id) VALUES ('Virtua Fighter 5', 'g-vf5')`);
+  const azor = (await db.runAsync(`INSERT INTO players (name, startgg_id) VALUES ('Azor DC', 'e-azor')`)).lastID;
+  const eve = (await db.runAsync(`INSERT INTO players (name, startgg_id) VALUES ('Eve', 'e-eve')`)).lastID;
+  await db.runAsync(
+    `INSERT INTO set_markets (tournament_id, game_id, startgg_set_id, round_text, player1_id, player2_id, state)
+     VALUES (1, ?, 'p4-wsf', 'Winners Semi-Final', ?, ?, 'open')`,
+    [p4, eve, azor]
+  );
+
+  await sync.processTournamentEvents({ id: 1 }, [{
+    id: 'ev-vf5', name: 'VF5', videogame: { id: 'g-vf5', name: 'Virtua Fighter 5' },
+    sets: { nodes: [{
+      id: 'vf5-wsf', state: 3, fullRoundText: 'Winners Semi-Final', round: 2, winnerId: 'e-jimi',
+      slots: [
+        { entrant: { id: 'e-jimi', name: 'jimi', seeds: [{ seedNum: 1 }] }, standing: { stats: { score: { value: 3 } } } },
+        { entrant: { id: 'e-azor', name: 'Azor DC', seeds: [{ seedNum: 4 }] }, standing: { stats: { score: { value: 0 } } } },
+      ],
+    }] },
+  }]);
+
+  const vf5 = await db.getAsync(`SELECT * FROM set_markets WHERE startgg_set_id = 'vf5-wsf'`);
+  assert.equal(vf5.player2_id, azor, 'Azor DC must be seated in the VF5 set despite an open P4AU market');
+  assert.equal(vf5.state, 'settled');
+  const p4m = await db.getAsync(`SELECT state FROM set_markets WHERE startgg_set_id = 'p4-wsf'`);
+  assert.equal(p4m.state, 'open', 'the other game\'s market is untouched');
+});
