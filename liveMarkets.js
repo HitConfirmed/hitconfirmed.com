@@ -193,14 +193,19 @@ async function fillBracketSlot({
   return withWriteTx(async () => {
 
   // Don't advance a player who still has an active (open/closed) match in this
-  // tournament. Start.gg pre-populates next-round slots based on seeding before
-  // feeder sets finish; without this guard a player appears in two live markets.
+  // tournament's bracket for THIS game. Start.gg pre-populates next-round slots
+  // based on seeding before feeder sets finish; without this guard a player
+  // appears in two live markets. Scoped to game_id: one person entered in two
+  // games at the same event is two independent brackets. Confirmed live at
+  // Astral Finish 2026: Azor DC's open Persona 4 Arena Ultimax Winners
+  // Semi-Final blocked every Virtua Fighter 5 set they played (completed on
+  // start.gg) from ever being filled/settled, leaving them stuck 'pending'.
   const stillActive = await db.getAsync(
     `SELECT id FROM set_markets
-     WHERE tournament_id = ? AND state IN ('open', 'closed')
+     WHERE tournament_id = ? AND game_id = ? AND state IN ('open', 'closed')
        AND (player1_id = ? OR player2_id = ?)
        AND startgg_set_id != ?`,
-    [tournamentId, playerId, playerId, startggSetId]
+    [tournamentId, gameId, playerId, playerId, startggSetId]
   );
   if (stillActive) return;
 
