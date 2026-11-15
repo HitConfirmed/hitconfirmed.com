@@ -806,6 +806,20 @@ app.get('/api/leagues/team-logo/:id', async (req, res) => {
   }
 });
 
+// Player photos from Liquipedia infoboxes (leagues/sync.js syncPlayerPhotos).
+app.get('/api/leagues/player-photo/:id', async (req, res) => {
+  try {
+    const row = await db.getAsync('SELECT content_type, data FROM league_player_photos WHERE id = ?', [Number(req.params.id)]);
+    if (!row || !row.data) return res.status(404).end();
+    res.set('Content-Type', row.content_type);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.send(row.data);
+  } catch (err) {
+    res.status(500).end();
+  }
+});
+
 app.get('/api/leagues/bets', requireAuth, async (req, res) => {
   try {
     res.json(await leagueMarkets.getUserBets(req.userId));

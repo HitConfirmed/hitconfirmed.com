@@ -63,7 +63,7 @@ function pages({ week10 = [{ t1: OJA, t2: RC, date: 'December 11, 2026' }], extr
     return map[p];
   };
 }
-const run = (fetchPage, now = NOW) => sync.syncSeason(CFG, { fetchPage, fetchImage: async () => ({ contentType: 'image/png', data: Buffer.from('png') }), imageGapMs: 0, now });
+const run = (fetchPage, now = NOW) => sync.syncSeason(CFG, { fetchPage, fetchImage: async () => ({ contentType: 'image/png', data: Buffer.from('png') }), imageGapMs: 0, query: async () => ({ query: { pages: {} } }), apiGapMs: 0, now });
 const week10Market = async () => (await mk.getSeason(CFG.slug, NOW)).matches.find((m) => m.round === 'Week 10' && m.market);
 const teamId = async (name) => (await db.getAsync('SELECT id FROM league_teams WHERE name = ?', [name])).id;
 const balance = (u) => wallet.getBalance(u);

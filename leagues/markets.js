@@ -284,10 +284,12 @@ async function getSeason(slug, now = Date.now()) {
      JOIN league_matches m ON m.id = lm.match_id WHERE m.season_id = ? AND b.state != 'refunded' GROUP BY b.market_id`, [s.id]);
   const pickCount = new Map(counts.map((c) => [c.market_id, c.n]));
 
+  const photoId = new Map((await db.allAsync('SELECT id, page FROM league_player_photos WHERE data IS NOT NULL')).map((r) => [r.page, r.id]));
+  const withPhoto = (p) => ({ ...p, photoUrl: p.page && photoId.has(p.page) ? `/api/leagues/player-photo/${photoId.get(p.page)}` : null });
   const teamOut = teams.map((t) => {
     const roster = t.roster_json ? JSON.parse(t.roster_json) : { players: [], staff: [] };
     return { id: t.id, name: t.name, shortName: t.short_name, division: t.division,
-      logoUrl: logoUrl(t.id, t.has_logo), players: roster.players || [], staff: roster.staff || [] };
+      logoUrl: logoUrl(t.id, t.has_logo), players: (roster.players || []).map(withPhoto), staff: roster.staff || [] };
   });
   const matchOut = matches.map((m) => {
     const mk = marketByMatch.get(m.id);

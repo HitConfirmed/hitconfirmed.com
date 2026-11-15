@@ -14,7 +14,7 @@ const SEASONS = [
 const JAPAN = {
   slug: 'sfl-japan-2026', name: 'Street Fighter League: JAPAN 2026', liquipediaUrl: 'https://liquipedia.net/fighters/x', syncedAt: '2026-11-14T12:00:00Z',
   teams: [
-    { id: 1, name: 'REJECT', shortName: 'RC', division: 'Division F', logoUrl: null, players: [{ name: 'Daigo' }, { name: 'Fuudo' }], staff: [] },
+    { id: 1, name: 'REJECT', shortName: 'RC', division: 'Division F', logoUrl: null, players: [{ name: 'Daigo', photoUrl: '/api/leagues/player-photo/7' }, { name: 'Fuudo', photoUrl: null }], staff: [] },
     { id: 2, name: 'Nagoya OJA', shortName: 'OJA', division: 'Division F', logoUrl: null, players: [{ name: 'Seiya' }], staff: [] },
   ],
   matches: [
@@ -50,6 +50,9 @@ test('opens the season with live picks, shows odds, results and standings', asyn
   expect(screen.getByText('Division F')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Teams' }));
   expect(screen.getByText('Daigo')).toBeInTheDocument();
+  // Photo when we have one, the initial otherwise.
+  expect(document.querySelector('img.lg-player-photo').getAttribute('src')).toBe('/api/leagues/player-photo/7');
+  expect(document.querySelector('.lg-player-photo-fallback').textContent).toBe('F');
 });
 
 test('places a pick for the chosen team', async () => {

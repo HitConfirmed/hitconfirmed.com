@@ -162,12 +162,21 @@ const Standings = ({ standings, teams }) => (
   </div>
 );
 
+// Liquipedia infobox photo, or the player's initial when there is none.
+const PlayerPhoto = ({ player }) => {
+  const [failed, setFailed] = useState(false);
+  if (player.photoUrl && !failed) {
+    return <img className="lg-player-photo" src={player.photoUrl} alt="" loading="lazy" onError={() => setFailed(true)} />;
+  }
+  return <span className="lg-player-photo lg-player-photo-fallback" aria-hidden="true">{(player.name || '?').charAt(0).toUpperCase()}</span>;
+};
+
 const Teams = ({ teams }) => (
   <div className="lg-teams">
     {teams.map((t) => (
       <div key={t.id} className="lg-team-card">
         <div className="lg-team-head"><TeamLogo team={t} size={36} /><div><div className="lg-team-name">{t.name}</div>{t.division && <div className="lg-team-div">{t.division}</div>}</div></div>
-        <ul className="lg-roster">{t.players.map((p) => <li key={p.name}>{p.name}</li>)}</ul>
+        <ul className="lg-roster">{t.players.map((p) => <li key={p.name}><PlayerPhoto player={p} /><span className="lg-player-name">{p.name}</span></li>)}</ul>
         {t.staff.length > 0 && <div className="lg-staff">Staff: {t.staff.map((s) => s.name).join(', ')}</div>}
       </div>
     ))}

@@ -63,9 +63,14 @@ function findSubpages(html, pagePath) {
 
 function parseMembers($, scope) {
   return scope.find('.team-participant-card__member').map((_, m) => {
-    const name = clean($(m).find('.team-participant-card__member-name .name').first().text());
+    const nameEl = $(m).find('.team-participant-card__member-name .name').first();
+    const name = clean(nameEl.text());
     const role = clean($(m).find('.team-participant-card__member-role').first().text()) || null;
-    return name ? { name, role } : null;
+    // The player's own wiki page (for their photo). Red links - pages that
+    // don't exist yet - have none.
+    const a = nameEl.find('a').first();
+    const page = a.length && !a.hasClass('new') && !/redlink=1/.test(a.attr('href') || '') ? clean(a.attr('title')) || null : null;
+    return name ? { name, role, page } : null;
   }).get().filter(Boolean);
 }
 

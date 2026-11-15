@@ -123,8 +123,11 @@
 .lg-team-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
 .lg-team-name { font: 700 15px 'Saira', sans-serif; }
 .lg-team-div { color: var(--muted); font-size: 12px; }
-.lg-roster { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.lg-roster li { background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+.lg-roster { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px 6px; }
+.lg-roster li { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; text-align: center; }
+.lg-player-photo { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; object-position: 50% 25%; background: var(--surface); border: 2px solid var(--border); flex-shrink: 0; }
+.lg-player-photo-fallback { display: flex; align-items: center; justify-content: center; color: var(--faint); font-weight: 700; font-size: 18px; }
+.lg-player-name { font-size: 13px; line-height: 1.2; max-width: 100%; overflow-wrap: anywhere; }
 .lg-staff { color: var(--faint); font-size: 12px; margin-top: 8px; }
 
 /* my picks */

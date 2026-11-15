@@ -87,10 +87,131 @@ async function syncTeamLogos(seasonId, fetchImage, imageGapMs) {
   }
 }
 
+// ---- player photos --------------------------------------------------------
+// Each rostered player's Liquipedia infobox photo, stored locally (like team
+// logos) so the page never hotlinks Liquipedia. Two batched API queries per
+// season (wikitext -> "|image=" file name, then imageinfo -> a thumbnail URL),
+// spaced to Liquipedia's 1-request-per-2s limit for non-parse API calls.
+// A player is re-checked weekly, so a new photo shows up within a week.
+const LP_API = 'https://liquipedia.net/fighters/api.php';
+const API_GAP_MS = 2000;
+const PHOTO_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+const PHOTO_WIDTH = 160;
+const PHOTO_MAX_BYTES = 512 * 1024;
+const API_BATCH = 50;
+
+async function liquipediaQuery(params) {
+  const url = `${LP_API}?${new URLSearchParams({ action: 'query', format: 'json', ...params })}`;
+  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// MediaWiki title form: underscores are spaces, first letter upper-case.
+const wikiTitle = (s) => { const t = String(s).replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+
+// "|image=AngryBird EWC 2025.jpg" from a player page's infobox.
+function infoboxImage(wikitext) {
+  const m = /^\s*\|\s*image\s*=\s*([^|\n}]*?)\s*$/m.exec(wikitext || '');
+  const file = m && m[1].replace(/^(file|image):/i, '').trim();
+  return file ? wikiTitle(file) : null;
+}
+
+// Follows MediaWiki's normalized + redirects chains back to what we asked for.
+function resolveTitles(query, requested) {
+  const step = new Map([...(query?.normalized || []), ...(query?.redirects || [])].map((r) => [r.from, r.to]));
+  const out = new Map();
+  for (const t of requested) {
+    let cur = t;
+    for (let i = 0; i < 5 && step.has(cur); i++) cur = step.get(cur);
+    out.set(t, cur);
+  }
+  return out;
+}
+
+async function syncPlayerPhotos(seasonId, { query = liquipediaQuery, fetchImage = fetchLiquipediaImage, apiGapMs = API_GAP_MS, imageGapMs = IMAGE_GAP_MS, now = Date.now() } = {}) {
+  const teams = await db.allAsync('SELECT roster_json FROM league_teams WHERE season_id = ? AND roster_json IS NOT NULL', [seasonId]);
+  const pages = new Set();
+  for (const t of teams) for (const p of JSON.parse(t.roster_json).players || []) if (p.page) pages.add(p.page);
+  const known = new Map((await db.allAsync('SELECT page, source_url, data IS NOT NULL AS has_data, checked_at FROM league_player_photos'))
+    .map((r) => [r.page, r]));
+  const due = [...pages].filter((p) => { const r = known.get(p); return !r || !r.checked_at || now - Date.parse(r.checked_at) >= PHOTO_RECHECK_MS; });
+  const stats = { checked: 0, downloaded: 0, none: 0, failed: 0 };
+  const checkedAt = new Date(now).toISOString();
+
+  for (let i = 0; i < due.length; i += API_BATCH) {
+    const batch = due.slice(i, i + API_BATCH);
+    let fileOf; let thumbOf;
+    try {
+      const q1 = await query({ prop: 'revisions', rvprop: 'content', rvslots: 'main', redirects: '1', titles: batch.join('|') });
+      const titleOf = resolveTitles(q1.query, batch);
+      const textOf = new Map(Object.values(q1.query?.pages || {}).map((p) => [p.title, p.revisions?.[0]?.slots?.main?.['*'] || '']));
+      fileOf = new Map(batch.map((p) => [p, infoboxImage(textOf.get(titleOf.get(p)))]));
+      const files = [...new Set([...fileOf.values()].filter(Boolean))];
+      thumbOf = new Map();
+      if (files.length) {
+        await sleep(apiGapMs);
+        const fileTitles = files.map((f) => `File:${f}`);
+        const q2 = await query({ prop: 'imageinfo', iiprop: 'url|mime', iiurlwidth: String(PHOTO_WIDTH), titles: fileTitles.join('|') });
+        const ftitleOf = resolveTitles(q2.query, fileTitles);
+        const infoOf = new Map(Object.values(q2.query?.pages || {}).map((p) => [p.title, p.imageinfo?.[0]]));
+        for (const f of files) {
+          const info = infoOf.get(ftitleOf.get(`File:${f}`));
+          if (info && /^image\//.test(info.mime || '')) thumbOf.set(f, info.thumburl || info.url);
+        }
+      }
+      await sleep(apiGapMs);
+    } catch (e) {
+      console.error(`[leagues] player photo lookup failed: ${e.message}`);
+      stats.failed += batch.length;
+      continue;
+    }
+
+    for (const page of batch) {
+      const file = fileOf.get(page);
+      const src = file ? thumbOf.get(file) : null;
+      stats.checked++;
+      if (!src) {
+        // No photo on the wiki (yet): remember that so we don't ask again until the weekly re-check.
+        await db.runAsync(
+          `INSERT INTO league_player_photos (page, file, source_url, content_type, data, checked_at) VALUES (?, NULL, NULL, NULL, NULL, ?)
+           ON CONFLICT(page) DO UPDATE SET file=NULL, source_url=NULL, content_type=NULL, data=NULL, checked_at=excluded.checked_at`,
+          [page, checkedAt]);
+        stats.none++;
+        continue;
+      }
+      const prev = known.get(page);
+      if (prev && prev.has_data && prev.source_url === src) {
+        await db.runAsync('UPDATE league_player_photos SET checked_at = ? WHERE page = ?', [checkedAt, page]);
+        continue;
+      }
+      try {
+        const img = await fetchImage(src);
+        if (!/^image\//.test(img.contentType || '')) throw new Error(`not an image (${img.contentType})`);
+        if (img.data.length > PHOTO_MAX_BYTES) throw new Error(`too large (${img.data.length} bytes)`);
+        await db.runAsync(
+          `INSERT INTO league_player_photos (page, file, source_url, content_type, data, checked_at) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(page) DO UPDATE SET file=excluded.file, source_url=excluded.source_url, content_type=excluded.content_type,
+             data=excluded.data, checked_at=excluded.checked_at`,
+          [page, file, src, img.contentType, img.data, checkedAt]);
+        stats.downloaded++;
+      } catch (e) {
+        // Left unchecked so the next run retries it; an older photo (if any) stays.
+        console.error(`[leagues] photo for ${page} failed: ${e.message}`);
+        stats.failed++;
+      } finally {
+        await sleep(imageGapMs);
+      }
+    }
+  }
+  return stats;
+}
+
 /**
  * Sync one season. Returns a summary for logging. `now` (ms) is injectable for tests.
  */
-async function syncSeason(cfg, { fetchPage = fetchPageHtml, fetchImage = fetchLiquipediaImage, imageGapMs = IMAGE_GAP_MS, now = Date.now() } = {}) {
+async function syncSeason(cfg, opts = {}) {
+  const { fetchPage = fetchPageHtml, fetchImage = fetchLiquipediaImage, imageGapMs = IMAGE_GAP_MS, now = Date.now() } = opts;
   const season = await upsertSeason(cfg);
   // "Seen in this run" is last_seen_at === stamp, so the stamp must be unique
   // per run even if the clock repeats or steps back.
@@ -191,7 +312,13 @@ async function syncSeason(cfg, { fetchPage = fetchPageHtml, fetchImage = fetchLi
   }
 
   await syncTeamLogos(season.id, fetchImage, imageGapMs);
-  return { slug: cfg.slug, teams: teams.size, matches: rows.filter((r) => r.last_seen_at === stamp).length, markets: actions };
+  let photos = null;
+  try {
+    photos = await syncPlayerPhotos(season.id, { query: opts.query, fetchImage, apiGapMs: opts.apiGapMs, imageGapMs, now });
+  } catch (e) {
+    console.error(`[leagues] player photos for ${cfg.slug} failed: ${e.message}`);
+  }
+  return { slug: cfg.slug, teams: teams.size, matches: rows.filter((r) => r.last_seen_at === stamp).length, markets: actions, photos };
 }
 
 async function syncAllLeagues(opts = {}) {
@@ -216,7 +343,7 @@ async function syncAllLeagues(opts = {}) {
   return results;
 }
 
-module.exports = { syncSeason, syncAllLeagues, lockAtFor };
+module.exports = { syncSeason, syncAllLeagues, lockAtFor, syncPlayerPhotos, infoboxImage };
 
 if (require.main === module) {
   syncAllLeagues().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

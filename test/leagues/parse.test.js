@@ -26,6 +26,12 @@ test('parseTeams splits players from staff', () => {
   assert.match(teams[0].logoUrl, /^https:\/\/liquipedia\.net\/commons\//);
 });
 
+test('parseTeams keeps each player wiki page, but not red links', () => {
+  const card = teamCard('REJECT', ['Daigo', 'Fuudo']).replace('<a title="Fuudo">', '<a class="new" href="/fighters/index.php?title=Fuudo&action=edit&redlink=1" title="Fuudo (page does not exist)">');
+  const [t] = parseTeams(seasonPage(PAGE, [card], []));
+  assert.deepStrictEqual(t.players.map((p) => p.page), ['Daigo', null]);
+});
+
 test('parseMatches: results, upcoming, TBD, divisions and round labels', () => {
   const html = `<h2>Details</h2><h3>Division S</h3>${matchList('Week 1', [
     { t1: ['IBUSHIGIN', 'IBSG'], t2: ['FAV gaming', 'FAV'], s1: 20, s2: 30, winner: 2, date: 'August 25, 2026', bo: 'Bo4', finished: true,

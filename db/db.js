@@ -425,6 +425,15 @@ try {
       content_type TEXT,
       data BLOB
     );
+    CREATE TABLE IF NOT EXISTS league_player_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      page TEXT NOT NULL UNIQUE,
+      file TEXT,
+      source_url TEXT,
+      content_type TEXT,
+      data BLOB,
+      checked_at TEXT
+    );
     CREATE TABLE IF NOT EXISTS league_matches (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       season_id INTEGER NOT NULL,
