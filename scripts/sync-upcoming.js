@@ -497,11 +497,11 @@ async function findBrandTournaments(query, after, before, ids = GAME_IDS) {
 const PLACEHOLDER_MATCH_DAYS = 3;
 const COMPANION_PAGE = /\b(side[\s-]?(events?|tourneys?|tournaments?|brackets?)|community tournaments?|pending approval|pre-?locals?|amateur|redemption)\b|^pre[\s-]/i;
 const TOURNAMENT_BY_SLUG = `
-query BySlug($slug: String!) { tournament(slug: $slug) { id name slug startAt } }`;
+query BySlug($slug: String!) { tournament(slug: $slug) { id name slug startAt isOnline } }`;
 const NAME_NEAR_DATE = `
 query ByName($name: String!, $after: Timestamp!, $before: Timestamp!) {
   tournaments(query: { perPage: 25, filter: { name: $name, afterDate: $after, beforeDate: $before } }) {
-    nodes { id name slug startAt }
+    nodes { id name slug startAt isOnline }
   }
 }`;
 const slugify = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -511,7 +511,7 @@ async function findPlaceholderSlugs(query = gql) {
   let rows;
   try {
     rows = await db.allAsync(
-      `SELECT id, name, date, liquipedia_page FROM tournaments
+      `SELECT id, name, date, city, liquipedia_page FROM tournaments
        WHERE liquipedia_page IS NOT NULL AND startgg_id IS NULL
          AND date(date, '+14 days') >= date('now')`
     );
@@ -520,8 +520,14 @@ async function findPlaceholderSlugs(query = gql) {
   for (const p of rows) {
     const day = Date.parse(String(p.date).slice(0, 10)) / 1000;
     const names = [...new Set([p.name, p.liquipedia_page].filter(Boolean))];
+    // Liquipedia gives an in-person event a real city. An ONLINE start.gg page
+    // with the same name and dates is a fan/mock bracket, not the event (real
+    // case: "Capcom Cup 13", Tokyo per Liquipedia, was adopted by a 12-entrant
+    // online start.gg page someone made up with Daigo/Tokido/MenaRD).
+    const inPerson = !!String(p.city || '').trim() && !/\bonline\b/i.test(p.city);
     const isMatch = (t) => t && t.slug && Number.isFinite(t.startAt)
       && Math.abs(t.startAt - day) <= (PLACEHOLDER_MATCH_DAYS + 1) * 86400
+      && !(inPerson && t.isOnline === true)
       && names.some((n) => sameEventName(t.name, n));
     let hit = null;
     try {

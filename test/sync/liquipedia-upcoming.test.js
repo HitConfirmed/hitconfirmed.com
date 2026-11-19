@@ -245,3 +245,28 @@ test('placeholder lookup picks the main event over same-dates companion pages', 
   assert.ok(!found.has('tournament/holiday-matsuri-2026-side-events'));
   assert.ok(!found.has('tournament/pre-holiday-matsuri-2026'));
 });
+
+// Real case (Nov 2026): Liquipedia has Capcom Cup 13 at Ryogoku Kokugikan,
+// Tokyo, Mar 10-14 2027. start.gg's "capcom-cup-13" is an ONLINE 12-entrant
+// mock bracket with the same name and dates; the slug guess adopted it, so the
+// site showed the real Capcom Cup with no city, fed by a fake bracket.
+test('placeholder lookup rejects an online start.gg page for an in-person Liquipedia event', async () => {
+  await db.runAsync(`INSERT INTO tournaments (name, date, city, country, liquipedia_page) VALUES
+    ('Capcom Cup 14', '2028-03-10', 'Tokyo', '', 'Capcom Cup/14'),
+    ('CPT 2027 World Warrior: Japan Regional Final', '2027-12-12', 'Online', '', 'CPT 2027 World Warrior: Japan Regional Final')`);
+  const at = (d) => Date.parse(d) / 1000;
+  const query = async (q, v) => {
+    if (v.slug === 'capcom-cup-14') return { tournament: { id: 21, name: 'Capcom Cup 14', slug: 'tournament/capcom-cup-14', startAt: at('2028-03-10T05:00:00Z'), isOnline: true } };
+    if (v.slug === 'cpt-2027-world-warrior-japan-regional-final') return { tournament: { id: 22, name: 'CPT 2027 World Warrior: Japan Regional Final', slug: 'tournament/cpt-2027-ww-japan', startAt: at('2027-12-12T05:00:00Z'), isOnline: true } };
+    if (v.slug) return { tournament: null };
+    if (v.name === 'Capcom Cup 14') return { tournaments: { nodes: [
+      { id: 23, name: 'Capcom Cup 14', slug: 'tournament/capcom-cup-14-2', startAt: at('2028-03-10T05:00:00Z'), isOnline: true },
+    ] } };
+    return { tournaments: { nodes: [] } };
+  };
+  const found = await su.findPlaceholderSlugs(query);
+  assert.ok(!found.has('tournament/capcom-cup-14'), 'online mock page must not be adopted for an in-person event');
+  assert.ok(!found.has('tournament/capcom-cup-14-2'));
+  // An event Liquipedia itself lists as Online still adopts its online page.
+  assert.ok(found.has('tournament/cpt-2027-ww-japan'));
+});
