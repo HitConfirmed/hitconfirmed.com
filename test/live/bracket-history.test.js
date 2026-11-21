@@ -273,3 +273,21 @@ test('a doubles/2v2 event is skipped when the same game also has a singles event
   assert.equal(syncLive.isSecondaryTeamEvent({ name: '2XKO mixed mode (singles and duos)', videogame: xko },
     [{ name: '2XKO mixed mode (singles and duos)', videogame: xko }, { name: '2XKO Singles', videogame: xko }]), false);
 });
+
+test('two ordinary brackets for one game: only the one with the most entrants is tracked', () => {
+  // Real case (#14): Battle Coliseum 2026 ran an MK1 open bracket and a
+  // separate 8-player "Kampeonato Brasileiro Finals" MK1 Top 8; both landed
+  // in the same MK1 tab.
+  const mk1 = { id: 48599 }, sf6 = { id: 43868 };
+  const evs = [
+    { id: 1635587, name: 'Mortal Kombat 1 (Open - 5K Prizepool) - PS5', numEntrants: 31, videogame: mk1 },
+    { id: 1635637, name: 'Kampeonato Brasileiro Finals - Mortal Kombat 1 - PS5', numEntrants: 8, videogame: mk1 },
+    { id: 1635500, name: 'MK1 Side Event', numEntrants: 64, videogame: mk1 }, // side events never win
+    { id: 1635600, name: 'Street Fighter 6', numEntrants: 134, videogame: sf6 },
+  ];
+  const tracked = evs.filter((e) => syncLive.isTrackedEvent(e, evs)).map((e) => e.id);
+  assert.deepEqual(tracked, [1635587, 1635600]);
+  // Unknown entrant counts (or a tie) fall back to the lowest event id, so exactly one is kept.
+  const tie = [{ id: 9, name: 'A', videogame: mk1 }, { id: 5, name: 'B', videogame: mk1 }];
+  assert.deepEqual(tie.filter((e) => syncLive.isTrackedEvent(e, tie)).map((e) => e.id), [5]);
+});

@@ -76,7 +76,7 @@ query LivePhases($id: ID!) {
   tournament(id: $id) {
     id name
     events {
-      id name videogame { id name }
+      id name numEntrants videogame { id name }
       phases { id name phaseOrder }
     }
   }
@@ -207,6 +207,25 @@ function isSecondaryTeamEvent(ev, allEvents) {
   const vg = ev.videogame?.id;
   return (allEvents || []).some((o) => o !== ev && o.videogame?.id === vg
     && !isTeamFormat(o.name) && !isSideEvent(o.name));
+}
+
+// Two (or more) ordinary singles brackets for the same game - e.g. Battle
+// Coliseum 2026 ran "Mortal Kombat 1 (Open - 5K Prizepool) - PS5" (31
+// entrants) and "Kampeonato Brasileiro Finals - Mortal Kombat 1 - PS5" (an
+// 8-player invitational Top 8) - would merge into one (tournament, game)
+// bracket like a side event does. Only the biggest one by entrants is
+// tracked; ties go to the lowest event id so the choice is stable.
+const entrants = (e) => Number(e?.numEntrants) || 0;
+function isSmallerDuplicateEvent(ev, allEvents) {
+  const vg = ev?.videogame?.id;
+  return (allEvents || []).some((o) => o !== ev && o.videogame?.id === vg
+    && !isSideEvent(o.name) && !isSecondaryTeamEvent(o, allEvents)
+    && (entrants(o) > entrants(ev) || (entrants(o) === entrants(ev) && Number(o.id) < Number(ev.id))));
+}
+
+// The one event per game that the live poller follows.
+function isTrackedEvent(ev, allEvents) {
+  return !isSideEvent(ev?.name) && !isSecondaryTeamEvent(ev, allEvents) && !isSmallerDuplicateEvent(ev, allEvents);
 }
 
 // Resolves an event's TRUE final phase. Start.gg's own phaseOrder doesn't
@@ -698,7 +717,7 @@ async function fetchActiveEvents(startggId, events = null, tournamentId = null) 
   const evs = events ?? (await fetchTournamentEvents(startggId));
   const out = [];
   for (const ev of evs) {
-    if (isSideEvent(ev.name) || isSecondaryTeamEvent(ev, evs)) continue;
+    if (!isTrackedEvent(ev, evs)) continue;
     if (await isGameFullyResolved(tournamentId, ev.videogame?.id)) continue;
     const phases = ev.phases || [];
     if (phases.length === 0) continue;
@@ -734,7 +753,7 @@ async function fetchHistoryPhases(startggId, events = null, tournamentId = null)
   const evs = events ?? (await fetchTournamentEvents(startggId));
   const out = [];
   for (const ev of evs) {
-    if (isSideEvent(ev.name) || isSecondaryTeamEvent(ev, evs)) continue;
+    if (!isTrackedEvent(ev, evs)) continue;
     if (await isGameFullyResolved(tournamentId, ev.videogame?.id)) continue;
     const phases = ev.phases || [];
     if (phases.length < 2) continue; // nothing before the final phase to track
@@ -947,7 +966,7 @@ async function syncLive({ all = false, tournamentIds = null } = {}) {
 
 module.exports = {
   syncLive, processTournamentEvents, fetchActiveEvents, selectTop8Sets, isTop8Round,
-  isPoolsPhase, isSideEvent, isSecondaryTeamEvent, isGameFullyResolved, resolveFinalPhase, classifyRoundStatus, groupSetsIntoRounds, fetchHistoryPhases, processHistorySets,
+  isPoolsPhase, isSideEvent, isSecondaryTeamEvent, isSmallerDuplicateEvent, isTrackedEvent, isGameFullyResolved, resolveFinalPhase, classifyRoundStatus, groupSetsIntoRounds, fetchHistoryPhases, processHistorySets,
   getActiveTournaments, reconcileStaleMarkets, reconcileOneStaleMarket,
 };
 
