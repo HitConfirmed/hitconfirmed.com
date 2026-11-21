@@ -21,7 +21,7 @@ before(async () => {
   await db.runAsync(`CREATE TABLE tournament_games (tournament_id INTEGER, game_id INTEGER, num_entrants INTEGER)`);
   await db.runAsync(`CREATE TABLE players_games_tournaments (tournament_id INTEGER, game_id INTEGER, player_id INTEGER, seed_num INTEGER)`);
   await db.runAsync(`CREATE TABLE games (id INTEGER PRIMARY KEY, name TEXT)`);
-  await db.runAsync(`CREATE TABLE set_markets (id INTEGER PRIMARY KEY, tournament_id INTEGER, state TEXT)`);
+  await db.runAsync(`CREATE TABLE set_markets (id INTEGER PRIMARY KEY, tournament_id INTEGER, game_id INTEGER, state TEXT, startgg_set_id TEXT)`);
   await db.runAsync(`CREATE TABLE IF NOT EXISTS bracket_history (id INTEGER PRIMARY KEY AUTOINCREMENT, tournament_id INTEGER, game_id INTEGER, startgg_set_id TEXT UNIQUE, round_text TEXT, round_int INTEGER, phase_order INTEGER, state TEXT, player1_id INTEGER, player2_id INTEGER, winner_id INTEGER, player1_score INTEGER, player2_score INTEGER, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
 });
 

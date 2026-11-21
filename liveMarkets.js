@@ -827,7 +827,16 @@ async function clearDemoMarkets() {
 // Returns an array sorted furthest-out first (empty when nothing is scheduled).
 async function getUpcoming() {
   const tournaments = await db.allAsync(
-    `SELECT id, name, date, city, country, logo_url AS logoUrl, is_live AS isLive,
+    // isLive also covers a start.gg event that has already started (date
+    // passed) and is still unresolved by the shared definition the poller and
+    // getMarkets() use. Nothing sets is_live=1 automatically, so without this a
+    // multi-day major vanished from Happening Now on day 2 the moment its only
+    // marketed game settled, even with other games still in pools - confirmed
+    // live: Battle Coliseum 2026 (MK1 finished day 1; SF6/2XKO/GGST/... still
+    // ACTIVE on start.gg) dropped out of /api/live/upcoming entirely. The date
+    // gate keeps a future event with early preview markets out of "live".
+    `SELECT id, name, date, city, country, logo_url AS logoUrl,
+       (is_live = 1 OR (startgg_id IS NOT NULL AND date(date) <= date('now') AND ${unresolvedSetsSql('smu', 't')})) AS isLive,
        (SELECT SUM(num_entrants) FROM tournament_games tg WHERE tg.tournament_id = t.id) AS numEntrants,
        EXISTS (SELECT 1 FROM bracket_history bh WHERE bh.tournament_id = t.id AND bh.state = 'in_progress') AS hasLiveRound
      FROM tournaments t
@@ -841,7 +850,7 @@ async function getUpcoming() {
             OR EXISTS (SELECT 1 FROM bracket_history bh2 WHERE bh2.tournament_id = t.id))
        AND (is_live = 1
             OR date(date) >= date('now')
-            OR EXISTS (SELECT 1 FROM set_markets sm2 WHERE sm2.tournament_id = t.id AND sm2.state IN ('open','closed')))
+            OR ${unresolvedSetsSql('sm2', 't')})
        )
        -- Bridge window for a manually-tracked event seeded ahead of its own
        -- results (auto-sync-manual-events.js's seedUpcomingTournament): its

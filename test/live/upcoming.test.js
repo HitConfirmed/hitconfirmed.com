@@ -227,3 +227,36 @@ test('diagnoseStuckLiveTournaments does not flag a multi-day major still within 
   const stuck = await lm.diagnoseStuckLiveTournaments();
   assert.deepEqual(stuck, []);
 });
+
+test('keeps a started multi-day start.gg event listed and live after its only marketed game settles while other games are still in pools', async () => {
+  // Real production case: Battle Coliseum 2026 (Nov 20-22). Its MK1 Top 8
+  // fully settled on day 1; on day 2 SF6/2XKO/GGST were still ACTIVE in
+  // pools on start.gg (fresh bracket_history, no real markets yet), but
+  // is_live was 0 and the stored date (day 1) had passed, so it vanished
+  // from /api/live/upcoming and from Happening Now.
+  await addGame(10, 'Mortal Kombat 1');
+  await addGame(11, 'Street Fighter 6');
+  await addTournament(1, 'Multi-Day Major', new Date(Date.now() - 86400000).toISOString().slice(0, 10));
+  await trackGame(1, 10);
+  await trackGame(1, 11);
+  await db.runAsync(`INSERT INTO set_markets (tournament_id, game_id, state, startgg_set_id) VALUES (1, 10, 'settled', '9001')`);
+  await db.runAsync(`INSERT INTO bracket_history (tournament_id, game_id, startgg_set_id, state) VALUES (1, 11, 'p-1', 'in_progress')`);
+  // Same shape but genuinely over (everything settled, no fresh pools) - must stay out.
+  await addTournament(2, 'Finished Major', new Date(Date.now() - 86400000).toISOString().slice(0, 10));
+  await trackGame(2, 10);
+  await db.runAsync(`INSERT INTO set_markets (tournament_id, game_id, state, startgg_set_id) VALUES (2, 10, 'settled', '9002')`);
+
+  const result = await lm.getUpcoming();
+  assert.deepEqual(result.map((r) => r.tournament.id), [1]);
+  assert.equal(!!result[0].tournament.isLive, true);
+});
+
+test('a future event with only early pending preview markets is listed but not live', async () => {
+  await addGame(10, 'Street Fighter 6');
+  await addTournament(1, 'Next Week Major', '2099-01-01');
+  await trackGame(1, 10);
+  await db.runAsync(`INSERT INTO set_markets (tournament_id, game_id, state, startgg_set_id) VALUES (1, 10, 'pending', 'preview_1')`);
+  const result = await lm.getUpcoming();
+  assert.equal(result.length, 1);
+  assert.equal(!!result[0].tournament.isLive, false);
+});
