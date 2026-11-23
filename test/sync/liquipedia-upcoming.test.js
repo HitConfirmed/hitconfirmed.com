@@ -270,3 +270,28 @@ test('placeholder lookup rejects an online start.gg page for an in-person Liquip
   // An event Liquipedia itself lists as Online still adopts its online page.
   assert.ok(found.has('tournament/cpt-2027-ww-japan'));
 });
+
+// Real case (Nov 23 2026): start.gg's name search for "SNK World Championship
+// 2026 Finals" around Nov 28 returned 51 fuzzy, date-sorted results; the real
+// "SNK World Championship 2026" (slug ...-2, so the slug guess misses) was on
+// page 2. Only page 1 was read, so the Stockholm event stayed a bracket-less
+// countdown card despite 5 live start.gg events.
+test('placeholder name search pages past start.gg page 1', async () => {
+  await db.runAsync(`INSERT INTO tournaments (name, date, city, country, liquipedia_page) VALUES
+    ('SNK World Championship 2026 Finals', '2026-11-28', 'Stockholm', '', 'SNK World Championship 2026 Finals')`);
+  const at = (d) => Date.parse(d) / 1000;
+  const filler = (n, off) => Array.from({ length: n }, (_, i) => ({ id: 100 + off + i, name: `Weekly Local #${off + i}`, slug: `tournament/weekly-local-${off + i}`, startAt: at('2026-11-28T18:00:00Z') }));
+  const pages = [];
+  const query = async (q, v) => {
+    if (v.slug) return { tournament: null };
+    pages.push(v.page);
+    if (v.page === 2) return { tournaments: { nodes: [...filler(17, 25),
+      { id: 5, name: 'SNK World Championship 2026', slug: 'tournament/snk-world-championship-2026-2', startAt: at('2026-11-27T11:00:00Z'), isOnline: false },
+      ...filler(7, 43)] } };
+    if (v.page === 3) return { tournaments: { nodes: filler(1, 50) } };
+    return { tournaments: { nodes: filler(25, 0) } };
+  };
+  const found = await su.findPlaceholderSlugs(query);
+  assert.ok(found.has('tournament/snk-world-championship-2026-2'));
+  assert.deepEqual(pages, [1, 2], 'stops paging once the event is found');
+});
