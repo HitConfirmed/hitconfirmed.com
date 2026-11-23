@@ -49,18 +49,33 @@ function stableIdFor(entrant) {
   return entrant?.id ?? null;
 }
 
+const isSoloEntrant = (entrant) => (entrant?.participants || []).length === 1 && entrant.participants[0]?.player?.id != null;
+
 async function findOrCreatePlayerId(entrant) {
   const name = entrant?.name?.trim();
   if (!name) return null;
   const photoUrl = photoOf(entrant);
   const lookupId = stableIdFor(entrant);
 
-  // Exact startgg_id match — already the row's own primary identity, so
-  // there's nothing to self-heal.
+  // Exact startgg_id match — already the row's own primary identity.
   if (lookupId != null) {
-    const byId = await db.getAsync('SELECT id FROM players WHERE startgg_id = ?', [lookupId]);
+    const byId = await db.getAsync('SELECT id, name FROM players WHERE startgg_id = ?', [lookupId]);
     if (byId) {
       if (photoUrl) await db.runAsync('UPDATE players SET photo_url = COALESCE(?, photo_url) WHERE id = ?', [photoUrl, byId.id]);
+      // Keep the display name current: the same person (stable player.id)
+      // changes tag/sponsor over time, and a frozen name shows bettors a
+      // player that isn't on stream or start.gg (#16: Battle Coliseum 2026
+      // showed "Offperky" for "Valiant | Silva"). Solo entrants only - a team
+      // entrant's id is per-registration, not a person. players.name is
+      // UNIQUE, so skip the rename if another row already holds the new name
+      // rather than making the 60s sync throw. Not done on the alias path
+      // below: an alias is a different start.gg account, and renaming the
+      // primary row after it would flip the name back and forth.
+      if (byId.name !== name && isSoloEntrant(entrant)) {
+        await db.runAsync(
+          'UPDATE players SET name = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM players WHERE name = ? AND id != ?)',
+          [name, byId.id, name, byId.id]);
+      }
       return byId.id;
     }
   }

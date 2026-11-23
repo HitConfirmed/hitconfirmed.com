@@ -33,8 +33,8 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  await db.runAsync('DELETE FROM players');
   await db.runAsync('DELETE FROM player_startgg_aliases');
+  await db.runAsync('DELETE FROM players');
 });
 
 after(() => { try { fs.unlinkSync(file); } catch { /* ignore */ } });
@@ -46,7 +46,7 @@ test('creates a new player when nothing matches', async () => {
   assert.equal(row.startgg_id, 111);
 });
 
-test('exact startgg_id match reuses the row without touching it', async () => {
+test('exact startgg_id match reuses the row', async () => {
   const { lastID } = await db.runAsync('INSERT INTO players (name, startgg_id) VALUES (?, ?)', ['Some Tag', 222]);
   const id = await lib.findOrCreatePlayerId(entrant({ name: 'Some Tag (renamed)', playerId: 222 }));
   assert.equal(id, lastID);
@@ -78,4 +78,34 @@ test('a known alias resolves to the canonical row without overwriting its primar
   // duplicate-recreation problem onto the OTHER account instead of fixing it.
   const row = await db.getAsync('SELECT startgg_id FROM players WHERE id = ?', [canonicalId]);
   assert.equal(row.startgg_id, 4004146);
+});
+
+test('exact startgg_id match picks up the player’s new tag (#16)', async () => {
+  // Battle Coliseum 2026: start.gg player 4818002 entered as "Valiant | Silva"
+  // but the site kept showing the row's original name, "Offperky".
+  const { lastID } = await db.runAsync('INSERT INTO players (name, startgg_id) VALUES (?, ?)', ['Offperky', 4818002]);
+  const id = await lib.findOrCreatePlayerId(entrant({ name: 'Valiant | Silva', playerId: 4818002 }));
+  assert.equal(id, lastID);
+  assert.equal((await db.getAsync('SELECT name FROM players WHERE id = ?', [id])).name, 'Valiant | Silva');
+});
+
+test('a rename that would collide with another row keeps the old name instead of throwing', async () => {
+  const { lastID } = await db.runAsync('INSERT INTO players (name, startgg_id) VALUES (?, ?)', ['Old Tag', 777]);
+  await db.runAsync('INSERT INTO players (name, startgg_id) VALUES (?, ?)', ['Taken Name', 888]);
+  const id = await lib.findOrCreatePlayerId(entrant({ name: 'Taken Name', playerId: 777 }));
+  assert.equal(id, lastID);
+  assert.equal((await db.getAsync('SELECT name FROM players WHERE id = ?', [id])).name, 'Old Tag');
+});
+
+test('team entrants and alias matches never rename a row', async () => {
+  // Team: keyed by entrant.id, which isn't a person.
+  const team = await db.runAsync('INSERT INTO players (name, startgg_id) VALUES (?, ?)', ['A / B', 4242]);
+  await lib.findOrCreatePlayerId({ name: 'A / C', id: 4242, participants: [{ player: { id: 1 } }, { player: { id: 2 } }] });
+  assert.equal((await db.getAsync('SELECT name FROM players WHERE id = ?', [team.lastID])).name, 'A / B');
+  // Alias: a different start.gg account for the same person.
+  const main = await db.runAsync('INSERT INTO players (name, startgg_id) VALUES (?, ?)', ['Xiaohai', 5000]);
+  await db.runAsync('INSERT INTO player_startgg_aliases (startgg_id, player_id) VALUES (?, ?)', [6000, main.lastID]);
+  const id = await lib.findOrCreatePlayerId(entrant({ name: 'xiaohai alt', playerId: 6000 }));
+  assert.equal(id, main.lastID);
+  assert.equal((await db.getAsync('SELECT name FROM players WHERE id = ?', [id])).name, 'Xiaohai');
 });
