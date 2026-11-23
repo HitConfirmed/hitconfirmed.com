@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app",
+      "runtimeExecutable": "C:\\nvm4w\\nodejs\\node.exe",
+      "runtimeArgs": ["server.js"],
+      "port": 5000
+    },
+    {
+      "name": "client",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "set PATH=C:\\nvm4w\\nodejs;%PATH%&& npm --prefix client start"],
+      "port": 3000
+    }
+  ]
+}

@@ -1,0 +1,220 @@
+/* ============================================================
+   MoneyMatch — Navbar.css  (premium dark sportsbook restyle)
+   Drop-in replacement: same class names as the current Navbar.
+   Assumes the dark/gold tokens from Home.css :root are loaded.
+   ============================================================ */
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(10, 12, 16, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--text);
+  font-family: 'Hanken Grotesk', -apple-system, sans-serif;
+  padding: 13px 28px;
+  box-shadow: none;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 1200px;
+  height: 56px;
+  margin: 0 auto;
+}
+
+/* Logo */
+.navbar-logo img {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.navbar-logo img:hover {
+  transform: scale(1.03);
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4));
+}
+
+/* Links group (flat, no glass pill) */
+.navbar-links {
+  list-style: none;
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+.navbar-links li { display: inline-block; }
+
+.navbar-links li a {
+  position: relative;
+  color: var(--muted);
+  text-decoration: none;
+  font-family: 'Saira', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.navbar-links li a:hover { color: #C9CCD3; }
+
+/* Active route: filled chip (no dot) */
+.navbar-links li a.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+}
+.navbar-links li a.active::before { content: none; }
+.navbar-links li a::after,
+.navbar-links li a.active::after { content: none; }
+
+/* Live link pulsing dot — add <span class="live-dot"> before the label,
+   or target the Live link specifically. */
+.navbar-links li a .live-dot,
+.navbar-links li a[href="/live"]::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--live);
+  display: inline-block;
+  animation: mmPulse 1.6s infinite;
+}
+
+/* Right-side account group */
+.navbar-username {
+  font-family: 'Saira', sans-serif;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+.navbar-username span { font-size: 14px; color: var(--text); }
+
+/* Balance pill */
+.navbar-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Saira', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--gold);
+  background: var(--gold-tint);
+  border: 1px solid rgba(231, 180, 88, 0.28);
+  padding: 7px 14px;
+  border-radius: 10px;
+  margin-right: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Deposit button (gold gradient) — add a .navbar-deposit button in Navbar.js */
+.navbar-deposit {
+  font-family: 'Saira', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--on-gold);
+  background: var(--gold-grad);
+  border: none;
+  padding: 9px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(231, 180, 88, 0.22);
+  transition: filter 0.15s ease;
+}
+.navbar-deposit:hover { filter: brightness(1.06); }
+
+/* Avatar / account chip */
+.navbar-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Saira', sans-serif;
+  font-weight: 700; font-size: 13px;
+  color: #C9CCD3;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.navbar-avatar:hover { border-color: rgba(231, 180, 88, 0.5); }
+
+/* Logout / login link (ghost-gold) */
+.navbar-logout-button,
+.navbar-login-link {
+  font-family: 'Saira', sans-serif;
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid rgba(231, 180, 88, 0.4);
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.navbar-logout-button:hover,
+.navbar-login-link:hover {
+  background: var(--gold-tint);
+  color: var(--gold);
+  transform: none;
+  box-shadow: none;
+}
+
+@keyframes mmPulse {
+  0%   { box-shadow: 0 0 0 0   rgba(255, 81, 89, 0.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(255, 81, 89, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(255, 81, 89, 0); }
+}
+
+/* Mobile hamburger toggle */
+.navbar-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 44px; height: 44px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.navbar-toggle span {
+  display: block;
+  width: 20px; height: 2px;
+  margin: 0 auto;
+  background: var(--text);
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+.navbar-toggle.open span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.navbar-toggle.open span:nth-child(2) { opacity: 0; }
+.navbar-toggle.open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+@media (max-width: 860px) {
+  .navbar { padding: 8px 14px; }
+  .navbar-inner { height: auto; padding: 6px 0; }
+  .navbar-toggle { display: flex; }
+  .navbar-links { display: none; width: 100%; margin-top: 10px; }
+  .navbar-links.open { display: flex; flex-direction: column; gap: 6px; }
+}

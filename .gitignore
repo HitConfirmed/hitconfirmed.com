@@ -54,3 +54,6 @@ coverage/
 
 # Ad-hoc/scratch SQL run by hand during dev (real scripts live in scripts/)
 /*.sql
+
+# Local DB snapshots (contain user emails and password hashes - never commit)
+db/*.local-backup-*

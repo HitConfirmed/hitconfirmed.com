@@ -1,0 +1,191 @@
+/* ============================================================
+   MoneyMatch — LiveBetting.css  (premium dark sportsbook restyle)
+   Drop-in replacement: same class names. Assumes the dark/gold
+   tokens from Home.css :root are loaded app-wide.
+   ============================================================ */
+
+.live-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 358px;
+  align-items: start;
+  gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 30px 28px 90px;
+  font-family: 'Hanken Grotesk', sans-serif;
+  color: var(--text);
+}
+.live-main { min-width: 0; }
+.live-loading { text-align: center; padding: 40px; color: var(--muted); }
+
+/* Demo tools (kept subtle/dark) */
+.live-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.live-demo-toggle, .live-demo-seed, .live-demo-reset {
+  padding: 6px 12px; border-radius: 8px; border: 1px dashed rgba(231,180,88,0.5);
+  background: var(--surface); color: var(--gold); font-family: 'Saira', sans-serif; font-weight: 600; cursor: pointer;
+}
+.live-demo-seed { border-style: solid; background: var(--gold-grad); color: var(--on-gold); border-color: transparent; }
+.live-demo-reset { border-color: rgba(255,81,89,0.5); color: var(--live-text); background: transparent; }
+.live-demo-reset:hover { background: var(--live-tint); }
+.live-demo-hint { color: var(--faint); font-size: 12px; }
+.live-demo-controls { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.live-demo-controls button {
+  flex: 1; padding: 6px 8px; font-size: 12px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer;
+}
+.live-demo-controls button:hover { background: #222834; }
+
+.live-empty {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+}
+.live-empty h2 { font-family: 'Saira', sans-serif; color: var(--text); margin-bottom: 8px; }
+
+.live-tournament { margin-bottom: 30px; }
+.live-tournament > h2 {
+  font-family: 'Saira', sans-serif; font-weight: 700; color: var(--text);
+  font-size: 19px; margin: 0 0 16px;
+}
+.live-game { margin-bottom: 20px; }
+.live-game > h3 {
+  display: flex; align-items: center; gap: 9px;
+  text-transform: uppercase; letter-spacing: .07em;
+  font-family: 'Saira', sans-serif; font-size: 12px; font-weight: 600;
+  color: var(--muted); margin: 0 0 11px;
+}
+.live-game-title img { flex-shrink: 0; }
+
+.live-market-grid { display: flex; flex-direction: column; gap: 12px; }
+
+/* Match card */
+.live-market {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 17px 19px; box-shadow: none;
+}
+.live-market.closed { opacity: 1; }
+.live-market.settled { background: var(--card); }
+
+.live-market-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.live-round { font-family: 'Saira', sans-serif; font-size: 14px; color: var(--gold); font-weight: 600; }
+
+.live-badge {
+  font-family: 'Saira', sans-serif; font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 6px; letter-spacing: .07em;
+}
+.live-badge.open { background: var(--win-tint); color: var(--win); }
+.live-badge.closed { background: var(--live-tint); color: var(--live-text); }
+.live-badge.settled { background: var(--surface); color: var(--muted); }
+.live-badge.void { background: var(--live-tint); color: var(--live-text); }
+
+/* Two odds buttons side by side */
+.live-sides { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 11px; }
+.live-side {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255,255,255,0.10); border-radius: 11px;
+  background: var(--surface); cursor: pointer;
+  font-family: 'Saira', sans-serif;
+  transition: transform .12s ease, background .15s ease, border-color .15s ease;
+}
+.live-side:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(231,180,88,0.45); }
+.live-side:disabled { cursor: not-allowed; background: #13161d; border-color: var(--border-soft); color: #565b66; }
+.live-side.picked {
+  background: var(--gold-grad); border-color: var(--gold);
+  box-shadow: 0 8px 22px rgba(231,180,88,0.28);
+}
+.live-side.picked .live-side-name, .live-side.picked .live-side-odds { color: var(--on-gold); }
+.live-side.winner { border-color: var(--win); background: var(--win-tint); }
+
+.live-side-name { font-weight: 600; color: var(--text); font-size: 15px; text-align: left; }
+.live-side-odds { font-weight: 700; color: var(--text); font-size: 19px; font-variant-numeric: tabular-nums; }
+.live-vs { align-self: center; color: var(--faint); font-size: 12px; font-weight: 600; }
+
+/* Right rail */
+.live-rail {
+  position: sticky; top: 88px; width: 100%; flex-shrink: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: none; overflow: hidden;
+  display: flex; flex-direction: column; gap: 0;
+}
+.live-slip { width: 100%; }
+.live-slip-header {
+  background: transparent; color: var(--text);
+  padding: 15px 18px; border-bottom: 1px solid var(--border);
+  font-family: 'Saira', sans-serif; font-weight: 700; font-size: 16px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.live-slip-balance { font-size: 13px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.live-slip-empty { padding: 34px 22px; color: var(--muted); font-size: 13px; text-align: center; }
+
+.live-slip-list { list-style: none; margin: 0; padding: 0; max-height: 38vh; overflow-y: auto; }
+.live-slip-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 14px 18px; border-bottom: 1px solid var(--border-soft);
+}
+.live-slip-info { display: flex; flex-direction: column; min-width: 0; }
+.live-slip-pick { font-family: 'Saira', sans-serif; font-weight: 600; color: var(--text); font-size: 15px; }
+.live-slip-odds { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+.live-slip-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-slip-pool { color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.live-slip-stake { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.live-slip-stake input[type="number"] {
+  width: 70px; padding: 8px; text-align: right;
+  border: 1px solid var(--border-strong); border-radius: 9px;
+  background: var(--input); color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.live-slip-stake input[type="number"]:focus { outline: none; border-color: rgba(231,180,88,0.5); }
+.live-slip-payout { font-size: 12px; color: var(--win); font-family: 'Saira', sans-serif; white-space: nowrap; }
+.live-slip-remove { border: none; background: none; color: var(--faint); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.live-slip-remove:hover { color: var(--live-text); }
+
+.live-slip-totals { padding: 15px 18px; border-top: 1px solid var(--border); }
+.live-slip-totals div { display: flex; justify-content: space-between; font-size: 13px; margin: 4px 0; color: var(--muted); }
+.live-slip-totals strong { color: var(--text); font-family: 'Saira', sans-serif; font-variant-numeric: tabular-nums; }
+.live-slip-totals div:last-child strong { color: var(--win); }
+
+.live-slip-warn { padding: 0 18px; color: var(--live-text); font-size: 12px; }
+.live-slip-explainer { padding: 8px 18px 0; color: var(--faint); font-size: 11px; line-height: 1.5; }
+.live-slip-explainer strong { color: var(--gold); }
+
+.live-slip-place {
+  display: block; width: calc(100% - 36px); margin: 14px 18px 16px; padding: 13px;
+  background: var(--gold-grad); color: var(--on-gold); border: none; border-radius: 12px;
+  font-family: 'Saira', sans-serif; font-weight: 700; text-transform: none; font-size: 15px;
+  cursor: pointer; box-shadow: var(--shadow-gold, 0 8px 22px rgba(231,180,88,0.25));
+}
+.live-slip-place:hover:not(:disabled) { filter: brightness(1.05); }
+.live-slip-place:disabled { background: #2a2f3a; color: #6b7280; cursor: not-allowed; box-shadow: none; }
+.live-slip-msg { padding: 12px 18px; font-size: 13px; color: var(--win); background: rgba(67,209,136,0.08); border-top: 1px solid rgba(67,209,136,0.2); font-weight: 600; }
+
+/* My Bets */
+.live-mybets { width: 100%; border-top: 1px solid var(--border); }
+.live-mybets-header {
+  background: transparent; color: var(--text);
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  font-family: 'Saira', sans-serif; font-weight: 700; font-size: 15px;
+}
+.live-mybets-list { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; }
+.live-mybets-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 13px 18px; border-bottom: 1px solid var(--border-soft);
+}
+.live-mybets-info { display: flex; flex-direction: column; min-width: 0; }
+.live-mybets-pick { font-family: 'Saira', sans-serif; font-weight: 600; color: var(--text); font-size: 14px; }
+.live-mybets-odds { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.live-mybets-meta { color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-mybets-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.live-mybets-status {
+  font-family: 'Saira', sans-serif; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 5px; letter-spacing: .05em;
+}
+.live-mybets-status.pending { background: var(--gold-tint); color: var(--gold); }
+.live-mybets-status.won { background: var(--win-tint); color: var(--win); }
+.live-mybets-status.lost { background: var(--live-tint); color: var(--live-text); }
+.live-mybets-status.refunded { background: var(--surface); color: var(--muted); }
+.live-mybets-amount { font-family: 'Saira', sans-serif; font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 980px) {
+  .live-layout { grid-template-columns: 1fr; }
+  .live-rail { position: static; width: 100%; }
+}

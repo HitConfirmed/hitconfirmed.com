@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="assets/fist-badge.png">
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{background:#0A0C10;color:#F3F1EA;font-family:'Hanken Grotesk',-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+    button{font-family:inherit}
+    input{font-family:inherit}
+    ::selection{background:#E7B458;color:#13161d}
+    input[type=number]::-webkit-inner-spin-button{display:none}
+    @keyframes mmPulse{0%{box-shadow:0 0 0 0 rgba(255,81,89,.55)}70%{box-shadow:0 0 0 6px rgba(255,81,89,0)}100%{box-shadow:0 0 0 0 rgba(255,81,89,0)}}
+  </style>
+</helmet>
+
+<div style="position:relative;min-height:100vh;background:#0A0C10">
+  <div style="position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(900px 420px at 50% -120px,rgba(231,180,88,0.06),transparent 70%),radial-gradient(700px 500px at 100% 0%,rgba(255,81,89,0.04),transparent 70%)"></div>
+
+  <sc-if value="{{ showChrome }}" hint-placeholder-val="{{ true }}">
+  <nav style="position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:13px 28px;background:rgba(10,12,16,0.82);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,0.07)">
+    <div style="display:flex;align-items:center;gap:30px;min-width:0">
+      <img src="assets/logo-wordmark.png" alt="MoneyMatch" onClick="{{ goHome }}" style="height:38px;width:auto;display:block;cursor:pointer">
+      <div style="display:flex;align-items:center;gap:4px">
+        <button onClick="{{ goHome }}" style="{{ homeNavStyle }}">Home</button>
+        <button onClick="{{ goLive }}" style="{{ liveNavStyle }}"><span style="width:7px;height:7px;border-radius:50%;background:#FF5159;display:inline-block;animation:mmPulse 1.6s infinite"></span>Live</button>
+        <button onClick="{{ goFutures }}" style="{{ futuresNavStyle }}">Futures</button>
+        <button onClick="{{ goResults }}" style="{{ resultsNavStyle }}">Results</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:10px;background:rgba(231,180,88,0.10);border:1px solid rgba(231,180,88,0.28)">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.06em;color:#B8923F;text-transform:uppercase">Balance</span>
+        <span style="font-family:'Saira',sans-serif;font-weight:700;font-size:15px;color:#E7B458;font-variant-numeric:tabular-nums">{{ balanceStr }}</span>
+      </div>
+      <button onClick="{{ openDeposit }}" style="font-family:'Saira',sans-serif;font-weight:700;font-size:14px;color:#1a1305;background:linear-gradient(135deg,#E7B458,#d6a13e);border:none;padding:9px 16px;border-radius:10px;cursor:pointer;box-shadow:0 6px 16px rgba(231,180,88,0.22)" style-hover="filter:brightness(1.06)">Deposit</button>
+      <div onClick="{{ goLogin }}" title="Account" style="width:36px;height:36px;border-radius:50%;background:#1b2029;border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-family:'Saira',sans-serif;font-weight:700;font-size:13px;color:#C9CCD3;cursor:pointer" style-hover="border-color:rgba(231,180,88,0.5)">YJ</div>
+    </div>
+  </nav>
+  </sc-if>
+
+  <!-- ============ HOME ============ -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <div style="position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:34px 28px 90px">
+
+    <!-- Live hero -->
+    <section style="position:relative;overflow:hidden;border-radius:22px;padding:26px 28px 24px;border:1px solid rgba(231,180,88,0.22);background:linear-gradient(155deg,#181208 0%,#11141b 58%);box-shadow:0 24px 70px rgba(0,0,0,0.45)">
+      <div style="position:absolute;top:-80px;right:-40px;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(231,180,88,0.16),transparent 65%);pointer-events:none"></div>
+      <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="display:inline-flex;align-items:center;gap:8px;font-family:'Saira',sans-serif;font-weight:700;font-size:13px;letter-spacing:.12em;color:#FF6168">
+            <span style="width:9px;height:9px;border-radius:50%;background:#FF5159;animation:mmPulse 1.6s infinite"></span>LIVE NOW
+          </span>
+          <span style="color:#8B909C;font-size:14px">{{ liveCount }} sets in play · <span style="color:#C9CCD3">EVO 2025, Las Vegas</span></span>
+        </div>
+        <button onClick="{{ goLive }}" style="font-family:'Saira',sans-serif;font-weight:600;font-size:14px;color:#E7B458;background:transparent;border:1px solid rgba(231,180,88,0.4);padding:8px 16px;border-radius:10px;cursor:pointer" style-hover="background:rgba(231,180,88,0.10)">Open live betting →</button>
+      </div>
+      <div style="position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+        <sc-for list="{{ heroSets }}" as="m" hint-placeholder-count="3">
+          <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.08);border-radius:15px;padding:15px 15px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
+              <span style="font-family:'Saira',sans-serif;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9aa0ad;background:rgba(255,255,255,0.05);padding:4px 9px;border-radius:6px;white-space:nowrap">{{ m.gameShort }}</span>
+              <span style="font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.round }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button onClick="{{ m.onP1 }}" style="{{ m.p1BtnStyle }}" style-hover="transform:translateY(-1px)"><span style="flex:1;min-width:0;font-weight:600;opacity:.94;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.p1 }}</span><b style="flex:none;font-size:17px;font-variant-numeric:tabular-nums">{{ m.p1OddsStr }}</b></button>
+              <button onClick="{{ m.onP2 }}" style="{{ m.p2BtnStyle }}" style-hover="transform:translateY(-1px)"><span style="flex:1;min-width:0;font-weight:600;opacity:.94;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.p2 }}</span><b style="flex:none;font-size:17px;font-variant-numeric:tabular-nums">{{ m.p2OddsStr }}</b></button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- Stat strip -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px">
+      <div style="background:#12151c;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px">
+        <div style="font-size:12px;color:#8B909C;letter-spacing:.04em;text-transform:uppercase;margin-bottom:7px">Balance</div>
+        <div style="font-family:'Saira',sans-serif;font-weight:700;font-size:24px;color:#F3F1EA;font-variant-numeric:tabular-nums">{{ balanceStr }}</div>
+      </div>
+      <div style="background:#12151c;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px">
+        <div style="font-size:12px;color:#8B909C;letter-spacing:.04em;text-transform:uppercase;margin-bottom:7px">Open bets</div>
+        <div style="font-family:'Saira',sans-serif;font-weight:700;font-size:24px;color:#F3F1EA;font-variant-numeric:tabular-nums">{{ openBets }}</div>
+      </div>
+      <div style="background:#12151c;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px">
+        <div style="font-size:12px;color:#8B909C;letter-spacing:.04em;text-transform:uppercase;margin-bottom:7px">7-day P&amp;L</div>
+        <div style="font-family:'Saira',sans-serif;font-weight:700;font-size:24px;font-variant-numeric:tabular-nums;color:{{ plColor }}">{{ plStr }}</div>
+      </div>
+    </div>
+
+    <!-- Next up -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:34px 0 16px">
+      <h2 style="margin:0;font-family:'Saira',sans-serif;font-weight:700;font-size:21px;letter-spacing:.01em">Next Up</h2>
+      <span style="color:#E7B458;font-size:14px;font-weight:600;cursor:pointer">See all futures →</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <sc-for list="{{ upcoming }}" as="t" hint-placeholder-count="3">
+        <div style="background:#12151c;border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px 20px" style-hover="border-color:rgba(231,180,88,0.25)">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">
+            <h3 style="margin:0;font-family:'Saira',sans-serif;font-weight:700;font-size:17px">{{ t.name }}</h3>
+            <span style="flex:none;font-size:12px;color:#E7B458;background:rgba(231,180,88,0.1);padding:3px 9px;border-radius:6px;white-space:nowrap">{{ t.date }}</span>
+          </div>
+          <div style="font-size:13px;color:#8B909C;margin-bottom:13px">{{ t.location }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+            <sc-for list="{{ t.games }}" as="g" hint-placeholder-count="3">
+              <span style="font-size:11px;color:#C9CCD3;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.06);padding:4px 9px;border-radius:6px">{{ g }}</span>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;font-size:13px;color:#9aa0ad;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#43D188"></span>{{ t.countdown }}
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Your bets -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:34px 0 16px">
+      <h2 style="margin:0;font-family:'Saira',sans-serif;font-weight:700;font-size:21px;letter-spacing:.01em">Your Bets</h2>
+      <span onClick="{{ goLive }}" style="color:#E7B458;font-size:14px;font-weight:600;cursor:pointer">Place bets →</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+      <sc-for list="{{ homeBets }}" as="b" hint-placeholder-count="4">
+        <div style="display:flex;align-items:center;gap:14px;background:#12151c;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px">
+          <div style="flex:none;width:42px;height:42px;border-radius:11px;background:#1b2029;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-family:'Saira',sans-serif;font-weight:700;font-size:14px;color:#E7B458">{{ b.initials }}</div>
+          <div style="min-width:0;flex:1">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-family:'Saira',sans-serif;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.pick }}</span>
+              <span style="flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;color:{{ b.kindColor }};border:1px solid {{ b.kindColor }};padding:1px 6px;border-radius:5px;opacity:.85">{{ b.kindLabel }}</span>
+            </div>
+            <div style="font-size:12px;color:#8B909C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">{{ b.meta }}</div>
+          </div>
+          <div style="text-align:right;flex:none">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:6px;margin-bottom:5px;{{ b.pillStyle }}">{{ b.statusLabel }}</div>
+            <div style="font-family:'Saira',sans-serif;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;color:{{ b.amountColor }}">{{ b.amountStr }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Recent champions -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:34px 0 16px">
+      <h2 style="margin:0;font-family:'Saira',sans-serif;font-weight:700;font-size:21px;letter-spacing:.01em">Recent Champions</h2>
+      <span style="color:#E7B458;font-size:14px;font-weight:600;cursor:pointer">All results →</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <sc-for list="{{ champions }}" as="c" hint-placeholder-count="6">
+        <div style="background:#12151c;border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px 20px">
+          <span style="font-family:'Saira',sans-serif;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#9aa0ad;background:rgba(255,255,255,0.05);padding:4px 9px;border-radius:6px">{{ c.game }}</span>
+          <div style="display:flex;align-items:center;gap:8px;margin:14px 0 3px">
+            <span style="color:#E7B458;font-size:15px">★</span>
+            <span style="font-family:'Saira',sans-serif;font-weight:700;font-size:19px">{{ c.winner }}</span>
+          </div>
+          <div style="font-size:13px;color:#8B909C;margin-bottom:14px">{{ c.tournament }} · {{ c.date }}</div>
+          <div style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:#C9CCD3;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);padding:5px 11px;border-radius:8px;font-variant-numeric:tabular-nums">
+            <b style="font-family:'Saira',sans-serif;color:#43D188">{{ c.score }}</b> def. {{ c.loser }}
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+  </div>
+  </sc-if>
+
+  <!-- ============ LIVE + FUTURES ============ -->
+  <sc-if value="{{ isBetting }}" hint-placeholder-val="{{ true }}">
+  <div style="position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:30px 28px 90px;display:grid;grid-template-columns:minmax(0,1fr) 358px;gap:24px;align-items:start">
+
+    <div style="min-width:0">
+      <sc-if value="{{ isLive }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+        <h1 style="margin:0;font-family:'Saira',sans-serif;font-weight:800;font-size:30px;letter-spacing:-0.01em">Live Betting</h1>
+        <span style="display:inline-flex;align-items:center;gap:7px;font-family:'Saira',sans-serif;font-weight:700;font-size:12px;letter-spacing:.1em;color:#FF6168;background:rgba(255,81,89,0.12);border:1px solid rgba(255,81,89,0.3);padding:5px 11px;border-radius:8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#FF5159;animation:mmPulse 1.6s infinite"></span>{{ liveCount }} LIVE
+        </span>
+      </div>
+      <p style="margin:0 0 22px;color:#8B909C;font-size:14px;max-width:560px">Parimutuel odds — the line shifts as money enters the pool. Tap any price to add it to your slip; payouts settle from the pool when the set starts.</p>
+
+      <sc-for list="{{ liveGroups }}" as="grp" hint-placeholder-count="1">
+        <section style="margin-bottom:30px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <h2 style="margin:0;font-family:'Saira',sans-serif;font-weight:700;font-size:18px">{{ grp.tournament }}</h2>
+            <span style="font-size:13px;color:#6b7280">{{ grp.location }}</span>
+          </div>
+          <sc-for list="{{ grp.games }}" as="g" hint-placeholder-count="2">
+            <div style="margin-bottom:20px">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">
+                <span style="font-family:'Saira',sans-serif;font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#9aa0ad;background:rgba(255,255,255,0.05);padding:5px 11px;border-radius:7px">{{ g.gameName }}</span>
+                <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <sc-for list="{{ g.markets }}" as="m" hint-placeholder-count="2">
+                  <div style="background:#12151c;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:17px 19px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
+                      <span style="font-family:'Saira',sans-serif;font-weight:600;font-size:14px;color:#E7B458">{{ m.round }}</span>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:12px;color:#6b7280;font-variant-numeric:tabular-nums">Pool {{ m.poolStr }}</span>
+                        <span style="font-size:10px;font-weight:700;letter-spacing:.07em;padding:3px 8px;border-radius:6px;{{ m.statePillStyle }}">{{ m.statePill }}</span>
+                      </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+                      <button onClick="{{ m.onP1 }}" style="{{ m.p1BtnStyle }}" style-hover="transform:translateY(-1px)">
+                        <span style="display:flex;align-items:center;gap:9px;min-width:0;flex:1"><span style="flex:none;width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ m.p1Initials }}</span><span style="flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.p1 }}</span></span>
+                        <b style="flex:none;font-size:19px;font-variant-numeric:tabular-nums">{{ m.p1OddsStr }}</b>
+                      </button>
+                      <button onClick="{{ m.onP2 }}" style="{{ m.p2BtnStyle }}" style-hover="transform:translateY(-1px)">
+                        <span style="display:flex;align-items:center;gap:9px;min-width:0;flex:1"><span style="flex:none;width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ m.p2Initials }}</span><span style="flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.p2 }}</span></span>
+                        <b style="flex:none;font-size:19px;font-variant-numeric:tabular-nums">{{ m.p2OddsStr }}</b>
+                      </button>
+                    </div>
+                    <div style="margin-top:14px">
+                      <div style="display:flex;justify-content:space-between;font-size:11px;color:#8B909C;margin-bottom:6px;font-variant-numeric:tabular-nums">
+                        <span>{{ m.p1 }} · {{ m.p1Pct }}</span>
+                        <span style="color:#6b7280">money in pool</span>
+                        <span>{{ m.p2 }} · {{ m.p2Pct }}</span>
+                      </div>
+                      <div style="display:flex;height:6px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,0.06)">
+                        <div style="{{ m.p1BarStyle }}"></div>
+                        <div style="{{ m.p2BarStyle }}"></div>
+                      </div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </section>
+      </sc-for>
+      </sc-if>
+
+      <!-- FUTURES content -->
+      <sc-if value="{{ isFutures }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+        <h1 style="margin:0;font-family:'Saira',sans-serif;font-weight:800;font-size:30px;letter-spacing:-0.01em">Futures</h1>
+        <span style="font-family:'Saira',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;color:#E7B458;background:rgba(231,180,88,0.12);border:1px solid rgba(231,180,88,0.3);padding:5px 11px;border-radius:8px">EVO 2025</span>
+      </div>
+      <p style="margin:0 0 22px;color:#8B909C;font-size:14px;max-width:560px">Back who lifts the trophy. Outright prices drift as the bracket plays out — lock yours in early for the longest odds.</p>
+      <sc-for list="{{ futuresView }}" as="fg" hint-placeholder-count="2">
+        <section style="margin-bottom:26px">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px">
+            <span style="font-family:'Saira',sans-serif;font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#9aa0ad;background:rgba(255,255,255,0.05);padding:5px 11px;border-radius:7px">{{ fg.game }}</span>
+            <span style="font-size:12px;color:#6b7280">Outright Winner · {{ fg.when }}</span>
+            <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <sc-for list="{{ fg.picks }}" as="p" hint-placeholder-count="5">
+              <button onClick="{{ p.onPick }}" style="{{ p.btnStyle }}" style-hover="transform:translateY(-1px)">
+                <span style="display:flex;align-items:center;gap:12px;min-width:0;flex:1">
+                  <span style="flex:none;font-family:'Saira',sans-serif;font-size:12px;font-weight:700;opacity:.5;font-variant-numeric:tabular-nums">{{ p.rank }}</span>
+                  <span style="flex:none;width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ p.initials }}</span>
+                  <span style="min-width:0">
+                    <span style="display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span>
+                    <span style="display:block;font-size:11px;opacity:.6;font-family:'Hanken Grotesk',sans-serif">{{ p.note }}</span>
+                  </span>
+                </span>
+                <b style="flex:none;font-size:19px;font-variant-numeric:tabular-nums">{{ p.oddsStr }}</b>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+      </sc-for>
+      </sc-if>
+    </div>
+
+    <!-- Rail -->
+    <aside style="position:sticky;top:88px;display:flex;flex-direction:column;gap:16px">
+      <div style="background:#12151c;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="font-family:'Saira',sans-serif;font-weight:700;font-size:16px">Bet Slip</span>
+            <span style="font-family:'Saira',sans-serif;font-weight:700;font-size:12px;color:#1a1305;background:#E7B458;padding:1px 8px;border-radius:99px;font-variant-numeric:tabular-nums">{{ slipCount }}</span>
+          </div>
+          <sc-if value="{{ hasSlip }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ clearSlip }}" style="background:transparent;border:none;color:#8B909C;font-size:13px;cursor:pointer" style-hover="color:#FF6168">Clear</button>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ slipEmpty }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:34px 22px;text-align:center">
+            <div style="font-size:13px;color:#8B909C;line-height:1.5">Tap a player's price to add a pick.<br>Build singles or stack a few.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasSlip }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <sc-for list="{{ slipEntries }}" as="e" hint-placeholder-count="2">
+              <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.05)">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                  <div style="min-width:0">
+                    <div style="font-family:'Saira',sans-serif;font-weight:600;font-size:15px">{{ e.pickName }} <span style="color:#E7B458;font-variant-numeric:tabular-nums">@{{ e.oddsStr }}</span></div>
+                    <div style="font-size:12px;color:#8B909C;margin-top:2px">vs {{ e.oppName }} · {{ e.meta }}</div>
+                  </div>
+                  <button onClick="{{ e.onRemove }}" style="flex:none;background:transparent;border:none;color:#6b7280;font-size:18px;line-height:1;cursor:pointer;padding:0 2px" style-hover="color:#FF6168">×</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                  <div style="display:flex;align-items:center;flex:1;background:#0d1016;border:1px solid rgba(255,255,255,0.1);border-radius:9px;padding:0 10px">
+                    <span style="color:#6b7280;font-size:14px">$</span>
+                    <input type="number" min="0" placeholder="0.00" value="{{ e.stake }}" onChange="{{ e.onStake }}" style="width:100%;background:transparent;border:none;outline:none;color:#F3F1EA;font-size:14px;padding:9px 4px;font-variant-numeric:tabular-nums">
+                  </div>
+                  <span style="font-size:13px;color:#8B909C;white-space:nowrap;font-variant-numeric:tabular-nums">→ <b style="color:#43D188;font-family:'Saira',sans-serif">{{ e.projStr }}</b></span>
+                </div>
+              </div>
+            </sc-for>
+
+            <div style="padding:15px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
+              <div style="display:flex;justify-content:space-between;font-size:13px;color:#8B909C;margin-bottom:7px"><span>Total stake</span><b style="color:#F3F1EA;font-family:'Saira',sans-serif;font-variant-numeric:tabular-nums">{{ slipStakeStr }}</b></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;color:#8B909C"><span>Projected payout</span><b style="color:#43D188;font-family:'Saira',sans-serif;font-variant-numeric:tabular-nums">{{ slipPayoutStr }}</b></div>
+            </div>
+
+            <div style="padding:14px 18px">
+              <p style="margin:0 0 12px;font-size:11px;color:#6b7280;line-height:1.5">Projection at current odds. Parimutuel lines move with the pool; your payout is locked from the pool the moment the set starts. Every winning bet is fully covered.</p>
+              <sc-if value="{{ overBalance }}" hint-placeholder-val="{{ false }}">
+                <p style="margin:0 0 10px;font-size:12px;color:#FF6168">Stake exceeds your balance.</p>
+              </sc-if>
+              <button onClick="{{ onPlace }}" style="width:100%;font-family:'Saira',sans-serif;font-weight:700;font-size:15px;color:#1a1305;background:linear-gradient(135deg,#E7B458,#d6a13e);border:none;padding:13px;border-radius:11px;cursor:pointer;box-shadow:0 8px 22px rgba(231,180,88,0.25)" style-hover="filter:brightness(1.05)">Place {{ slipCount }} Bet{{ slipPlural }}</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasPlaceMsg }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:12px 18px;background:rgba(67,209,136,0.08);border-top:1px solid rgba(67,209,136,0.2);font-size:13px;color:#43D188;font-weight:600">{{ placeMsg }}</div>
+        </sc-if>
+      </div>
+
+      <!-- My bets -->
+      <div style="background:#12151c;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.07);font-family:'Saira',sans-serif;font-weight:700;font-size:15px">My Bets <span style="color:#6b7280;font-weight:600">· {{ myBetsCount }}</span></div>
+        <sc-for list="{{ myBetsView }}" as="b" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div style="min-width:0">
+              <div style="font-family:'Saira',sans-serif;font-weight:600;font-size:14px">{{ b.pick }} <span style="color:#8B909C;font-weight:500;font-variant-numeric:tabular-nums">@{{ b.oddsStr }}</span></div>
+              <div style="font-size:11px;color:#6b7280;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.meta }}</div>
+            </div>
+            <div style="text-align:right;flex:none">
+              <div style="font-size:10px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:5px;margin-bottom:4px;{{ b.pillStyle }}">{{ b.statusLabel }}</div>
+              <div style="font-family:'Saira',sans-serif;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;color:{{ b.amountColor }}">{{ b.amountStr }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+
+  </div>
+  </sc-if>
+
+  <!-- ============ RESULTS ============ -->
+  <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
+  <div style="position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:34px 28px 90px">
+    <h1 style="margin:0 0 6px;font-family:'Saira',sans-serif;font-weight:800;font-size:30px;letter-spacing:-0.01em">Results</h1>
+    <p style="margin:0 0 22px;color:#8B909C;font-size:14px">Every settled major — champions in gold, with the deciding score.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+      <sc-for list="{{ filterTabs }}" as="t" hint-placeholder-count="5">
+        <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+      </sc-for>
+    </div>
+    <div style="background:#12151c;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:120px minmax(0,1.4fr) 84px minmax(0,1.2fr) 70px minmax(0,1fr);gap:14px;padding:13px 22px;border-bottom:1px solid rgba(255,255,255,0.09);font-family:'Saira',sans-serif;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b7280">
+        <span>Date</span><span>Tournament</span><span>Game</span><span>Champion</span><span style="text-align:center">Score</span><span>Runner-up</span>
+      </div>
+      <sc-for list="{{ resultsRows }}" as="r" hint-placeholder-count="8">
+        <div style="display:grid;grid-template-columns:120px minmax(0,1.4fr) 84px minmax(0,1.2fr) 70px minmax(0,1fr);gap:14px;align-items:center;padding:15px 22px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:14px">
+          <span style="color:#8B909C;font-variant-numeric:tabular-nums;white-space:nowrap">{{ r.dateStr }}</span>
+          <span style="color:#C9CCD3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.tournament }}</span>
+          <span style="font-family:'Saira',sans-serif;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9aa0ad">{{ r.gameShort }}</span>
+          <span style="display:flex;align-items:center;gap:8px;min-width:0"><span style="color:#E7B458;flex:none">★</span><b style="font-family:'Saira',sans-serif;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.winner }}</b></span>
+          <span style="text-align:center;font-family:'Saira',sans-serif;font-weight:700;color:#43D188;font-variant-numeric:tabular-nums">{{ r.score }}</span>
+          <span style="color:#8B909C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.loser }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ LOGIN ============ -->
+  <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ false }}">
+  <div style="position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+    <div style="width:100%;max-width:400px">
+      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:24px">
+        <img src="assets/logo-wordmark.png" alt="MoneyMatch" onClick="{{ goHome }}" style="height:72px;width:auto;margin-bottom:18px;cursor:pointer;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.5))">
+        <div style="font-family:'Saira',sans-serif;font-weight:700;font-size:23px">{{ loginTitle }}</div>
+        <div style="color:#8B909C;font-size:14px;margin-top:5px">Play-money betting on the FGC.</div>
+      </div>
+      <div style="background:#12151c;border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,0.45)">
+        <div style="display:flex;gap:6px;background:#0d1016;border:1px solid rgba(255,255,255,0.07);border-radius:11px;padding:5px;margin-bottom:20px">
+          <button onClick="{{ setLogin }}" style="{{ loginNavStyleA }}">Log in</button>
+          <button onClick="{{ setSignup }}" style="{{ loginNavStyleB }}">Sign up</button>
+        </div>
+        <sc-if value="{{ isSignupMode }}" hint-placeholder-val="{{ false }}">
+          <label style="display:block;font-size:12px;color:#8B909C;margin-bottom:7px;font-weight:600">Display name</label>
+          <input placeholder="Your tag" style="width:100%;background:#0d1016;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 13px;color:#F3F1EA;font-size:14px;outline:none;margin-bottom:15px" style-focus="border-color:rgba(231,180,88,0.5)">
+        </sc-if>
+        <label style="display:block;font-size:12px;color:#8B909C;margin-bottom:7px;font-weight:600">Email</label>
+        <input type="email" placeholder="you@example.com" style="width:100%;background:#0d1016;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 13px;color:#F3F1EA;font-size:14px;outline:none;margin-bottom:15px" style-focus="border-color:rgba(231,180,88,0.5)">
+        <label style="display:block;font-size:12px;color:#8B909C;margin-bottom:7px;font-weight:600">Password</label>
+        <input type="password" placeholder="••••••••" style="width:100%;background:#0d1016;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 13px;color:#F3F1EA;font-size:14px;outline:none;margin-bottom:20px" style-focus="border-color:rgba(231,180,88,0.5)">
+        <button onClick="{{ signIn }}" style="width:100%;font-family:'Saira',sans-serif;font-weight:700;font-size:15px;color:#1a1305;background:linear-gradient(135deg,#E7B458,#d6a13e);border:none;padding:13px;border-radius:11px;cursor:pointer;box-shadow:0 8px 22px rgba(231,180,88,0.22)" style-hover="filter:brightness(1.05)">{{ loginCta }}</button>
+      </div>
+      <div onClick="{{ toggleAuth }}" style="text-align:center;margin-top:18px;color:#8B909C;font-size:13px;cursor:pointer" style-hover="color:#E7B458">{{ loginToggleText }}</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ DEPOSIT MODAL ============ -->
+  <sc-if value="{{ depositOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeDeposit }}" style="position:fixed;inset:0;z-index:100;background:rgba(5,7,10,0.72);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div onClick="{{ stop }}" style="width:100%;max-width:420px;background:#12151c;border:1px solid rgba(255,255,255,0.1);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,0.6);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.07)">
+        <span style="font-family:'Saira',sans-serif;font-weight:700;font-size:18px">Add play money</span>
+        <button onClick="{{ closeDeposit }}" style="background:transparent;border:none;color:#8B909C;font-size:23px;line-height:1;cursor:pointer;padding:0 2px" style-hover="color:#F3F1EA">×</button>
+      </div>
+      <div style="padding:22px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding:12px 15px;border-radius:11px;background:#0d1016;border:1px solid rgba(255,255,255,0.06)">
+          <span style="font-size:13px;color:#8B909C">Current balance</span>
+          <span style="font-family:'Saira',sans-serif;font-weight:700;font-size:17px;color:#E7B458;font-variant-numeric:tabular-nums">{{ balanceStr }}</span>
+        </div>
+        <div style="font-size:12px;color:#8B909C;letter-spacing:.04em;text-transform:uppercase;font-weight:600;margin-bottom:11px">Choose an amount</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px">
+          <sc-for list="{{ depositPresets }}" as="p" hint-placeholder-count="4">
+            <button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font-size:12px;color:#8B909C;letter-spacing:.04em;text-transform:uppercase;font-weight:600;margin-bottom:11px">Or enter your own</div>
+        <div style="display:flex;align-items:center;background:#0d1016;border:1px solid rgba(255,255,255,0.1);border-radius:11px;padding:0 14px;margin-bottom:18px" style-focus-within="border-color:rgba(231,180,88,0.5)">
+          <span style="color:#8B909C;font-size:18px;font-family:'Saira',sans-serif">$</span>
+          <input type="number" min="0" value="{{ depositInputVal }}" onChange="{{ onDepositInput }}" placeholder="Custom amount" style="width:100%;background:transparent;border:none;outline:none;color:#F3F1EA;font-size:18px;font-family:'Saira',sans-serif;padding:13px 8px;font-variant-numeric:tabular-nums">
+        </div>
+        <p style="margin:0 0 16px;font-size:11px;color:#6b7280;line-height:1.5">Play money only — MoneyMatch never uses real funds. Top up instantly and keep the bragging rights.</p>
+        <button onClick="{{ onConfirmDeposit }}" style="width:100%;font-family:'Saira',sans-serif;font-weight:700;font-size:15px;color:#1a1305;background:linear-gradient(135deg,#E7B458,#d6a13e);border:none;padding:13px;border-radius:12px;cursor:pointer;box-shadow:0 8px 22px rgba(231,180,88,0.25)" style-hover="filter:brightness(1.05)">Add {{ depositAmountStr }}</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.markets = [
+      { id:'sf1', tournament:'EVO 2025', location:'Las Vegas, NV', game:'Street Fighter 6', round:'Winners Semifinal', p1:'Punk', p2:'MenaRD', p1odds:1.72, p2odds:2.18, p1pool:4280, p2pool:3120, state:'open' },
+      { id:'sf2', tournament:'EVO 2025', location:'Las Vegas, NV', game:'Street Fighter 6', round:'Winners Semifinal', p1:'Tokido', p2:'Kakeru', p1odds:2.45, p2odds:1.58, p1pool:2210, p2pool:3940, state:'open' },
+      { id:'tk1', tournament:'EVO 2025', location:'Las Vegas, NV', game:'Tekken 8', round:'Grand Final', p1:'Knee', p2:'Arslan Ash', p1odds:1.95, p2odds:1.90, p1pool:5120, p2pool:5360, state:'closed' },
+      { id:'tk2', tournament:'EVO 2025', location:'Las Vegas, NV', game:'Tekken 8', round:'Losers Final', p1:'Ulsan', p2:'Chikurin', p1odds:1.65, p2odds:2.30, p1pool:3650, p2pool:2480, state:'open' },
+    ];
+    // Outright (futures) markets — bet on who lifts the EVO trophy per game.
+    this.futures = [
+      { game:'Street Fighter 6', when:'Top 8 · Sun 3:00 PM', picks:[
+        { id:'sf6_mena', name:'MenaRD', note:'Seed 1', odds:3.50 },
+        { id:'sf6_punk', name:'Punk', note:'Seed 2', odds:4.00 },
+        { id:'sf6_toki', name:'Tokido', note:'Seed 4', odds:6.50 },
+        { id:'sf6_kak', name:'Kakeru', note:'Seed 6', odds:7.00 },
+        { id:'sf6_bird', name:'Big Bird', note:'Seed 9', odds:11.0 },
+        { id:'sf6_field', name:'The Field', note:'Any other entrant', odds:5.00 },
+      ]},
+      { game:'Tekken 8', when:'Top 8 · Sun 5:30 PM', picks:[
+        { id:'tk_ars', name:'Arslan Ash', note:'Seed 1', odds:2.75 },
+        { id:'tk_knee', name:'Knee', note:'Seed 2', odds:3.25 },
+        { id:'tk_uls', name:'Ulsan', note:'Seed 3', odds:6.00 },
+        { id:'tk_chik', name:'Chikurin', note:'Seed 5', odds:8.00 },
+        { id:'tk_field', name:'The Field', note:'Any other entrant', odds:4.50 },
+      ]},
+    ];
+    // Past results, newest first.
+    this.results = [
+      { date:'2025-05-25', tournament:'Combo Breaker 2025', game:'Street Fighter 6', winner:'MenaRD', loser:'Punk', score:'3–1' },
+      { date:'2025-05-11', tournament:'Evo Japan 2025', game:'Tekken 8', winner:'Arslan Ash', loser:'Knee', score:'3–2' },
+      { date:'2025-04-20', tournament:'Mainstage', game:'Tekken 8', winner:'Ulsan', loser:'Chikurin', score:'3–1' },
+      { date:'2025-04-06', tournament:'Kombat Cup', game:'Mortal Kombat 1', winner:'Rewind', loser:'Nicolas', score:'3–2' },
+      { date:'2025-03-30', tournament:'Topanga League', game:'Street Fighter 6', winner:'Kakeru', loser:'Tokido', score:'3–2' },
+      { date:'2025-03-16', tournament:'NorCal Regionals', game:'Guilty Gear', winner:'Zando', loser:'Leffen', score:'3–0' },
+      { date:'2025-02-16', tournament:'Frosty Faustings XVII', game:'Guilty Gear', winner:'Zando', loser:'TempestNYC', score:'3–1' },
+      { date:'2025-02-02', tournament:'Brussels Challenge', game:'Street Fighter 6', winner:'Big Bird', loser:'MenaRD', score:'3–2' },
+      { date:'2025-01-26', tournament:'Genesis X', game:'Tekken 8', winner:'Knee', loser:'Arslan Ash', score:'3–2' },
+      { date:'2025-01-12', tournament:'Kombat Klash', game:'Mortal Kombat 1', winner:'Nicolas', loser:'Rewind', score:'3–1' },
+    ];
+    this.state = {
+      screen: 'home',
+      balance: 250.00,
+      slip: {},
+      resultsFilter: 'All',
+      authMode: 'login',
+      myBets: [
+        { id:'b1', pick:'Daigo', meta:'EVO 2025 · SF6 Champion', odds:4.50, stake:25, status:'pending', kind:'Futures' },
+        { id:'b2', pick:'Knee', meta:'EVO 2025 · Tekken 8 · GF', odds:1.80, stake:40, status:'won', payout:72, kind:'Live' },
+        { id:'b3', pick:'Chikurin', meta:'EVO 2025 · Tekken 8 · LF', odds:2.10, stake:20, status:'lost', kind:'Live' },
+      ],
+      placeMsg: null,
+      depositOpen: false,
+      depositAmount: 100,
+    };
+  }
+
+  stop = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
+  openDeposit = () => this.setState({ depositOpen: true });
+  closeDeposit = () => this.setState({ depositOpen: false });
+  setDepositAmount = (a) => this.setState({ depositAmount: a });
+  onDepositInput = (e) => { const v = String(e.target.value).replace(/[^0-9.]/g, ''); this.setState({ depositAmount: v }); };
+  confirmDeposit = () => this.setState(s => {
+    const amt = Number(s.depositAmount || 0);
+    if (!(amt > 0)) return s;
+    return { balance: s.balance + amt, depositOpen: false };
+  });
+
+  money(n) { return '$' + Number(n).toFixed(2); }
+  initials(name) {
+    const parts = String(name).trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return String(name).slice(0, 2).toUpperCase();
+  }
+
+  goHome = () => this.setState({ screen: 'home' });
+  goLive = () => this.setState({ screen: 'live' });
+  goFutures = () => this.setState({ screen: 'futures' });
+  goResults = () => this.setState({ screen: 'results' });
+  goLogin = () => this.setState({ screen: 'login' });
+  signIn = () => this.setState({ screen: 'home' });
+  setAuthMode = (mode) => this.setState({ authMode: mode });
+  setResultsFilter = (f) => this.setState({ resultsFilter: f });
+
+  addFuture(game, p) {
+    const key = 'fut_' + p.id;
+    this.setState(s => {
+      if (s.slip[key]) return s;
+      return {
+        placeMsg: null,
+        slip: { ...s.slip, [key]: {
+          key, pickName: p.name, oppName: 'the field',
+          gameName: game, round: 'EVO Champion', odds: p.odds, stake: '',
+        } },
+      };
+    });
+  }
+
+  addToSlip(m, side) {
+    if (m.state !== 'open') return;
+    const key = m.id + '_' + side;
+    this.setState(s => {
+      if (s.slip[key]) return s;
+      const isP1 = side === 'p1';
+      return {
+        placeMsg: null,
+        slip: { ...s.slip, [key]: {
+          key, marketId: m.id, side,
+          pickName: isP1 ? m.p1 : m.p2,
+          oppName: isP1 ? m.p2 : m.p1,
+          gameName: m.game, round: m.round,
+          odds: isP1 ? m.p1odds : m.p2odds,
+          stake: '',
+        } },
+      };
+    });
+  }
+  removeFromSlip(key) {
+    this.setState(s => { const next = { ...s.slip }; delete next[key]; return { slip: next }; });
+  }
+  updateStake(key, val) {
+    const clean = String(val).replace(/[^0-9.]/g, '');
+    this.setState(s => ({ slip: { ...s.slip, [key]: { ...s.slip[key], stake: clean } } }));
+  }
+  clearSlip = () => this.setState({ slip: {}, placeMsg: null });
+  placeBets = () => {
+    const entries = Object.values(this.state.slip).filter(e => Number(e.stake) > 0);
+    if (!entries.length) return;
+    const total = entries.reduce((a, e) => a + Number(e.stake), 0);
+    if (total > this.state.balance) return;
+    const newBets = entries.map((e, i) => ({
+      id: 'p' + Date.now() + i, pick: e.pickName,
+      meta: 'EVO 2025 · ' + e.gameName + ' · ' + e.round,
+      odds: e.odds, stake: Number(e.stake), status: 'pending', kind: 'Live',
+    }));
+    this.setState(s => ({
+      myBets: [...newBets, ...s.myBets],
+      slip: {}, balance: s.balance - total,
+      placeMsg: 'Placed ' + entries.length + ' bet' + (entries.length > 1 ? 's' : '') + ' · ' + this.money(total) + ' staked.',
+    }));
+  };
+
+  oddsBtnStyle(selected, closed) {
+    const base = "display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:11px 14px;border-radius:11px;font-family:'Saira',sans-serif;cursor:pointer;transition:transform .12s,background .15s,border-color .15s;text-align:left;border:1px solid;line-height:1.15;";
+    if (closed) return base + 'background:#13161d;border-color:rgba(255,255,255,0.06);color:#565b66;cursor:not-allowed;';
+    if (selected) return base + 'background:linear-gradient(135deg,#E7B458,#d6a13e);border-color:#E7B458;color:#1a1305;box-shadow:0 8px 22px rgba(231,180,88,0.28);';
+    return base + 'background:#1b2029;border-color:rgba(255,255,255,0.10);color:#F3F1EA;';
+  }
+
+  mv(m) {
+    const total = m.p1pool + m.p2pool;
+    const p1pct = Math.round((m.p1pool / total) * 100);
+    const p2pct = 100 - p1pct;
+    const sel1 = !!this.state.slip[m.id + '_p1'];
+    const sel2 = !!this.state.slip[m.id + '_p2'];
+    const closed = m.state !== 'open';
+    const shortMap = { 'Street Fighter 6':'SF6', 'Tekken 8':'Tekken 8', 'Guilty Gear':'GGST', 'Mortal Kombat 1':'MK1' };
+    return {
+      ...m,
+      gameShort: shortMap[m.game] || m.game,
+      p1Initials: this.initials(m.p1), p2Initials: this.initials(m.p2),
+      p1OddsStr: m.p1odds.toFixed(2), p2OddsStr: m.p2odds.toFixed(2),
+      poolStr: '$' + total.toLocaleString(),
+      p1Pct: p1pct + '%', p2Pct: p2pct + '%',
+      p1BarStyle: 'height:100%;width:' + p1pct + '%;background:linear-gradient(90deg,#E7B458,#caa044)',
+      p2BarStyle: 'height:100%;width:' + p2pct + '%;background:rgba(255,255,255,0.18)',
+      p1BtnStyle: this.oddsBtnStyle(sel1, closed),
+      p2BtnStyle: this.oddsBtnStyle(sel2, closed),
+      statePill: closed ? 'STARTING' : 'OPEN',
+      statePillStyle: closed
+        ? 'background:rgba(255,81,89,0.14);color:#FF6168'
+        : 'background:rgba(67,209,136,0.14);color:#43D188',
+      onP1: () => this.addToSlip(m, 'p1'),
+      onP2: () => this.addToSlip(m, 'p2'),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const navBase = "font-family:'Saira',sans-serif;font-size:14px;font-weight:600;padding:8px 14px;border-radius:9px;border:none;cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .15s;";
+    const navActive = 'background:rgba(255,255,255,0.08);color:#F3F1EA;';
+    const navIdle = 'background:transparent;color:#8B909C;';
+
+    const mkts = this.markets.map(m => this.mv(m));
+    const openMkts = mkts.filter(m => m.state === 'open');
+
+    // group for live page
+    const groups = {};
+    for (const m of mkts) {
+      groups[m.tournament] = groups[m.tournament] || { tournament: m.tournament, location: m.location, gamesMap: {} };
+      groups[m.tournament].gamesMap[m.game] = groups[m.tournament].gamesMap[m.game] || { gameName: m.game, markets: [] };
+      groups[m.tournament].gamesMap[m.game].markets.push(m);
+    }
+    const liveGroups = Object.values(groups).map(g => ({
+      tournament: g.tournament, location: g.location,
+      games: Object.values(g.gamesMap),
+    }));
+
+    // slip
+    const slipArr = Object.values(s.slip);
+    const slipEntries = slipArr.map(e => ({
+      key: e.key, pickName: e.pickName, oppName: e.oppName,
+      oddsStr: e.odds.toFixed(2), meta: e.gameName + ' · ' + e.round,
+      stake: e.stake,
+      projStr: this.money((Number(e.stake) || 0) * e.odds),
+      onStake: (ev) => this.updateStake(e.key, ev.target.value),
+      onRemove: () => this.removeFromSlip(e.key),
+    }));
+    const stakeTotal = slipArr.reduce((a, e) => a + (Number(e.stake) || 0), 0);
+    const payoutTotal = slipArr.reduce((a, e) => a + (Number(e.stake) || 0) * e.odds, 0);
+
+    // bets view
+    const betView = (b) => {
+      const base = { pick: b.pick, meta: b.meta, oddsStr: b.odds.toFixed(2) };
+      if (b.status === 'won') {
+        const net = (b.payout || b.stake * b.odds) - b.stake;
+        return { ...base, statusLabel: 'WON', pillStyle: 'background:rgba(67,209,136,0.14);color:#43D188',
+          amountStr: '+' + this.money(net), amountColor: '#43D188' };
+      }
+      if (b.status === 'lost') {
+        return { ...base, statusLabel: 'LOST', pillStyle: 'background:rgba(255,81,89,0.14);color:#FF6168',
+          amountStr: '−' + this.money(b.stake), amountColor: '#FF6168' };
+      }
+      return { ...base, statusLabel: 'PENDING', pillStyle: 'background:rgba(231,180,88,0.14);color:#E7B458',
+        amountStr: this.money(b.stake), amountColor: '#C9CCD3' };
+    };
+    const myBetsView = s.myBets.map(betView);
+
+    // home bets (with avatar + kind)
+    const homeBets = s.myBets.slice(0, 4).map(b => {
+      const v = betView(b);
+      return { ...v, initials: this.initials(b.pick),
+        kindLabel: (b.kind || 'Live').toUpperCase(),
+        kindColor: b.kind === 'Futures' ? '#8a7fd6' : '#FF6168' };
+    });
+
+    // P&L
+    const pl = s.myBets.reduce((a, b) => {
+      if (b.status === 'won') return a + ((b.payout || b.stake * b.odds) - b.stake);
+      if (b.status === 'lost') return a - b.stake;
+      return a;
+    }, 0);
+    const openBets = s.myBets.filter(b => b.status === 'pending').length;
+
+    // Futures (outright) view
+    const futuresView = this.futures.map(fg => ({
+      game: fg.game, when: fg.when,
+      picks: fg.picks.map((p, i) => {
+        const sel = !!s.slip['fut_' + p.id];
+        return {
+          name: p.name, note: p.note, oddsStr: p.odds.toFixed(2),
+          rank: String(i + 1).padStart(2, '0'),
+          initials: this.initials(p.name),
+          selected: sel,
+          btnStyle: this.oddsBtnStyle(sel, false),
+          onPick: () => this.addFuture(fg.game, p),
+        };
+      }),
+    }));
+
+    // Results: filter + format
+    const fmtDate = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const filter = s.resultsFilter;
+    const resultsRows = this.results
+      .filter(r => filter === 'All' || r.game === filter)
+      .map(r => ({ ...r, dateStr: fmtDate(r.date), gameShort: ({ 'Street Fighter 6':'SF6','Tekken 8':'Tekken 8','Guilty Gear':'GGST','Mortal Kombat 1':'MK1' })[r.game] || r.game }));
+    const filterTabs = ['All', 'Street Fighter 6', 'Tekken 8', 'Guilty Gear', 'Mortal Kombat 1'].map(g => {
+      const active = filter === g;
+      const label = ({ 'Street Fighter 6':'SF6','Tekken 8':'Tekken 8','Guilty Gear':'GGST','Mortal Kombat 1':'MK1' })[g] || g;
+      return {
+        label, active,
+        onClick: () => this.setResultsFilter(g),
+        style: "font-family:'Saira',sans-serif;font-weight:600;font-size:13px;padding:8px 15px;border-radius:9px;cursor:pointer;transition:all .15s;border:1px solid " +
+          (active ? 'transparent;background:#E7B458;color:#1a1305;' : 'rgba(255,255,255,0.1);background:transparent;color:#8B909C;'),
+      };
+    });
+
+    return {
+      isHome: s.screen === 'home',
+      isLive: s.screen === 'live',
+      isFutures: s.screen === 'futures',
+      isResults: s.screen === 'results',
+      isLogin: s.screen === 'login',
+      isBetting: s.screen === 'live' || s.screen === 'futures',
+      showChrome: s.screen !== 'login',
+      goHome: this.goHome, goLive: this.goLive, goFutures: this.goFutures,
+      goResults: this.goResults, goLogin: this.goLogin, signIn: this.signIn,
+      homeNavStyle: navBase + (s.screen === 'home' ? navActive : navIdle),
+      liveNavStyle: navBase + (s.screen === 'live' ? navActive : navIdle),
+      futuresNavStyle: navBase + (s.screen === 'futures' ? navActive : navIdle),
+      resultsNavStyle: navBase + (s.screen === 'results' ? navActive : navIdle),
+      balanceStr: this.money(s.balance),
+      liveCount: openMkts.length,
+
+      futuresView,
+      resultsRows,
+      filterTabs,
+      isLoginMode: s.authMode === 'login',
+      isSignupMode: s.authMode === 'signup',
+      setLogin: () => this.setAuthMode('login'),
+      setSignup: () => this.setAuthMode('signup'),
+      toggleAuth: () => this.setAuthMode(s.authMode === 'login' ? 'signup' : 'login'),
+      loginTitle: s.authMode === 'login' ? 'Welcome back' : 'Create your account',
+      loginCta: s.authMode === 'login' ? 'Log in' : 'Sign up free',
+      loginToggleText: s.authMode === 'login' ? "New here? Create an account" : 'Already have an account? Log in',
+      loginNavStyleA: "flex:1;font-family:'Saira',sans-serif;font-weight:600;font-size:14px;padding:9px;border-radius:8px;cursor:pointer;border:none;transition:all .15s;" + (s.authMode === 'login' ? 'background:#1b2029;color:#F3F1EA;' : 'background:transparent;color:#8B909C;'),
+      loginNavStyleB: "flex:1;font-family:'Saira',sans-serif;font-weight:600;font-size:14px;padding:9px;border-radius:8px;cursor:pointer;border:none;transition:all .15s;" + (s.authMode === 'signup' ? 'background:#1b2029;color:#F3F1EA;' : 'background:transparent;color:#8B909C;'),
+
+      heroSets: openMkts.slice(0, 3),
+      liveGroups,
+
+      upcoming: [
+        { name: 'CEO 2025', location: 'Daytona Beach, FL', date: 'Jun 27–29', countdown: 'Starts in 10 days', games: ['Street Fighter 6', 'Tekken 8', 'Mortal Kombat 1', '+3 more'] },
+        { name: 'Red Bull Kumite', location: 'Las Vegas, NV', date: 'Jul 12–13', countdown: 'Starts in 25 days', games: ['Street Fighter 6'] },
+        { name: 'Combo Breaker 2026', location: 'Schaumburg, IL', date: 'May 22–24', countdown: 'Starts in 11 months', games: ['Street Fighter 6', 'Tekken 8', 'Guilty Gear', '+5 more'] },
+      ],
+
+      homeBets,
+
+      champions: [
+        { game: 'Street Fighter 6', winner: 'MenaRD', tournament: 'Combo Breaker 2025', date: 'May 25', score: '3–1', loser: 'Punk' },
+        { game: 'Tekken 8', winner: 'Arslan Ash', tournament: 'Evo Japan 2025', date: 'May 11', score: '3–2', loser: 'Knee' },
+        { game: 'Guilty Gear', winner: 'Zando', tournament: 'Frosty Faustings', date: 'Feb 16', score: '3–0', loser: 'TempestNYC' },
+        { game: 'Mortal Kombat 1', winner: 'Rewind', tournament: 'Kombat Cup', date: 'Apr 6', score: '3–2', loser: 'Nicolas' },
+        { game: 'Street Fighter 6', winner: 'Kakeru', tournament: 'Topanga League', date: 'Mar 30', score: '3–2', loser: 'Tokido' },
+        { game: 'Tekken 8', winner: 'Ulsan', tournament: 'Mainstage', date: 'Apr 20', score: '3–1', loser: 'Chikurin' },
+      ],
+
+      openBets,
+      plStr: (pl >= 0 ? '+' : '−') + this.money(Math.abs(pl)).slice(1),
+      plColor: pl >= 0 ? '#43D188' : '#FF6168',
+
+      // slip
+      slipCount: slipArr.length,
+      slipPlural: slipArr.length === 1 ? '' : 's',
+      hasSlip: slipArr.length > 0,
+      slipEmpty: slipArr.length === 0,
+      slipEntries,
+      slipStakeStr: this.money(stakeTotal),
+      slipPayoutStr: this.money(payoutTotal),
+      overBalance: stakeTotal > s.balance,
+      onPlace: this.placeBets,
+      clearSlip: this.clearSlip,
+      placeMsg: s.placeMsg,
+      hasPlaceMsg: !!s.placeMsg,
+
+      myBetsView,
+      myBetsCount: s.myBets.length,
+
+      depositOpen: s.depositOpen,
+      openDeposit: this.openDeposit,
+      closeDeposit: this.closeDeposit,
+      onConfirmDeposit: this.confirmDeposit,
+      stop: this.stop,
+      onDepositInput: this.onDepositInput,
+      depositInputVal: s.depositAmount,
+      depositAmountStr: this.money(Number(s.depositAmount) || 0),
+      depositValid: Number(s.depositAmount) > 0,
+      depositPresets: [50, 100, 250, 500].map(a => {
+        const active = Number(s.depositAmount) === a;
+        return {
+          label: '$' + a, amount: a,
+          onClick: () => this.setDepositAmount(a),
+          style: "font-family:'Saira',sans-serif;font-weight:700;font-size:17px;padding:14px;border-radius:12px;cursor:pointer;transition:all .15s;font-variant-numeric:tabular-nums;border:1px solid " +
+            (active ? '#E7B458;background:linear-gradient(135deg,#E7B458,#d6a13e);color:#1a1305;' : 'rgba(255,255,255,0.1);background:#1b2029;color:#F3F1EA;'),
+        };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>

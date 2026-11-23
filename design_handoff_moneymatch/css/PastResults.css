@@ -1,0 +1,102 @@
+/* ============================================================
+   MoneyMatch — PastResults.css  (premium dark restyle)
+   Drop-in replacement: same class names. Assumes dark/gold tokens.
+   ============================================================ */
+
+.past-results-container {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 34px 28px 90px;
+  font-family: 'Hanken Grotesk', sans-serif;
+  color: var(--text);
+}
+.past-results-container h1 {
+  text-align: left;
+  font-family: 'Saira', sans-serif;
+  color: var(--text);
+  margin-bottom: 6px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.loading-spinner { text-align: center; padding: 50px; font-size: 1.1em; color: var(--muted); }
+.error-message { text-align: center; padding: 16px; background: var(--card); color: var(--live-text); border: 1px solid var(--border); border-radius: 12px; margin: 20px 0; font-weight: 600; }
+
+/* Filter tabs / section */
+.filter-section {
+  display: flex; align-items: center; gap: 8px; margin: 16px 0 20px; padding: 0;
+  background: transparent; border: none; border-radius: 0; flex-wrap: wrap;
+}
+.filter-section label { font-weight: 600; color: var(--muted); }
+.year-filter, .filter-select {
+  padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 9px;
+  font-size: 14px; background: var(--input); color: var(--text); cursor: pointer;
+}
+.year-filter:focus, .filter-select:focus { outline: none; border-color: rgba(231,180,88,0.5); }
+.results-count { color: var(--muted); font-size: 14px; margin-left: auto; }
+.filter-group { display: flex; align-items: center; gap: 8px; }
+.filter-group label { font-weight: 600; color: var(--muted); }
+.clear-filters {
+  margin-left: auto; padding: 8px 14px; background: var(--gold-grad); color: var(--on-gold);
+  border: none; border-radius: 9px; font-family: 'Saira', sans-serif; font-weight: 600; cursor: pointer;
+}
+.clear-filters:hover { filter: brightness(1.05); }
+
+/* Tip: render the game filters as pill tabs — active = gold fill, idle = bordered.
+   If you keep them as buttons, this class gives the right look: */
+.filter-tab {
+  font-family: 'Saira', sans-serif; font-weight: 600; font-size: 13px;
+  padding: 8px 15px; border-radius: 9px; cursor: pointer; transition: all .15s ease;
+  border: 1px solid var(--border-strong); background: transparent; color: var(--muted);
+}
+.filter-tab:hover { color: var(--text); }
+.filter-tab.active { background: var(--gold-grad); color: var(--on-gold); border-color: transparent; }
+
+.no-results { text-align: center; padding: 50px; color: var(--muted); font-size: 1.05em; }
+
+/* Results table */
+.results-table-container {
+  overflow-x: auto; margin-bottom: 30px; border-radius: 16px;
+  border: 1px solid var(--border); box-shadow: none;
+}
+.results-table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 14px; }
+.results-table thead { background: transparent; color: var(--muted); }
+.results-table th {
+  padding: 13px 14px; text-align: left; font-family: 'Saira', sans-serif;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); border-bottom: 1px solid var(--border);
+}
+.results-table th.game { text-align: left; }
+.results-table td { padding: 15px 14px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+.results-table tbody tr { transition: background-color 0.15s ease; }
+.results-table tbody tr:hover { background: var(--surface); }
+
+.tournament-name { font-family: 'Saira', sans-serif; font-weight: 600; color: #C9CCD3; min-width: 150px; max-width: 200px; overflow-wrap: anywhere; }
+.tournament-name img { max-width: 180px; }
+.location { color: var(--muted); min-width: 120px; }
+.date { color: var(--muted); font-family: 'Saira', sans-serif; font-weight: 500; font-variant-numeric: tabular-nums; min-width: 100px; }
+.game { color: var(--muted); font-family: 'Saira', sans-serif; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; min-width: 100px; text-align: left; }
+.results-table td.game > div { display: flex; align-items: center; justify-content: flex-start; width: 100%; }
+.winner { font-family: 'Saira', sans-serif; color: var(--text); font-weight: 700; min-width: 100px; max-width: 180px; overflow-wrap: anywhere; }
+.winner::before { content: "★ "; color: var(--gold); }
+.score { font-family: 'Saira', sans-serif; font-weight: 700; color: var(--win); text-align: center; min-width: 70px; font-variant-numeric: tabular-nums; }
+.loser { color: var(--muted); font-weight: 500; min-width: 100px; max-width: 180px; overflow-wrap: anywhere; }
+
+/* Summary statistics */
+.summary-stats { background: var(--card); padding: 22px; border-radius: 16px; border: 1px solid var(--border); }
+.summary-stats h3 { margin: 0 0 18px; font-family: 'Saira', sans-serif; color: var(--text); font-size: 1.2em; text-align: left; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.stat-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; box-shadow: none; }
+.stat-label { font-weight: 600; color: var(--muted); }
+.stat-value { font-family: 'Saira', sans-serif; font-size: 1.2em; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 768px) {
+  .past-results-container { padding: 20px 16px 60px; }
+  .past-results-container h1 { font-size: 24px; }
+  .filter-section { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  .results-count { margin-left: 0; }
+  .results-table { font-size: 12px; }
+  .results-table th, .results-table td { padding: 10px 8px; }
+  .stats-grid { grid-template-columns: 1fr; }
+}
