@@ -335,19 +335,23 @@ async function processTournament(slug, args) {
     // tournament_games was add-only, so a game start.gg no longer lists here
     // (an event the organizer removed, or one only Liquipedia listed before
     // start.gg adopted the placeholder) stayed on the card forever. Real case:
-    // MINDSET 2026 kept showing Invincible Vs. with no such event on start.gg.
-    // Only with the full tracked-id list (so an auto-tracked game isn't
-    // mistaken for missing), and never a game anything hangs off already.
+    // MINDSET 2026 kept showing Invincible Vs. (with 3 seeds, no bets) after
+    // the organizer deleted that event. Only with the full tracked-id list (so
+    // an auto-tracked game isn't mistaken for missing), and never a game a
+    // bet, parlay leg or set market hangs off - its seeds go with it.
     if (args.trackedIds) {
-      await db.runAsync(
-        `DELETE FROM tournament_games
-         WHERE tournament_id = ? AND game_id NOT IN (${keepGameIds.map(() => '?').join(',')})
-           AND NOT EXISTS (SELECT 1 FROM players_games_tournaments p
-                           WHERE p.tournament_id = tournament_games.tournament_id AND p.game_id = tournament_games.game_id)
-           AND NOT EXISTS (SELECT 1 FROM set_markets m
-                           WHERE m.tournament_id = tournament_games.tournament_id AND m.game_id = tournament_games.game_id)`,
+      const inUse = ['bets', 'parlay_legs', 'set_markets'].map((tbl) =>
+        `NOT EXISTS (SELECT 1 FROM ${tbl} x WHERE x.tournament_id = tg.tournament_id AND x.game_id = tg.game_id)`).join(' AND ');
+      const dropped = await db.allAsync(
+        `SELECT tg.game_id FROM tournament_games tg
+         WHERE tg.tournament_id = ? AND tg.game_id NOT IN (${keepGameIds.map(() => '?').join(',')}) AND ${inUse}`,
         [tournamentId, ...keepGameIds]
       );
+      for (const { game_id: gameId } of dropped) {
+        await db.runAsync('DELETE FROM players_games_tournaments WHERE tournament_id = ? AND game_id = ?', [tournamentId, gameId]);
+        await db.runAsync('DELETE FROM tournament_games WHERE tournament_id = ? AND game_id = ?', [tournamentId, gameId]);
+      }
+      if (dropped.length) console.log(`[sync-upcoming] ${t.name}: dropped ${dropped.length} game(s) start.gg no longer lists`);
     }
   }
 
@@ -582,6 +586,30 @@ async function findPlaceholderSlugs(query = gql) {
   return found;
 }
 
+// Upcoming tournaments already on file with a start.gg id. A Liquipedia
+// placeholder that start.gg adopted (MINDSET, SNK World Championship...) is
+// outside BRANDS and no longer a placeholder, so without this it was never
+// visited again: seeds froze and games the organizer removed stayed listed.
+const TOURNAMENT_BY_ID = `
+query ById($id: ID!) { tournament(id: $id) { id name slug } }`;
+async function findTrackedUpcomingSlugs(before, query = gql) {
+  const rows = await db.allAsync(
+    `SELECT startgg_id, name FROM tournaments
+     WHERE startgg_id IS NOT NULL AND date(date) >= date('now', '-3 days') AND date(date) <= date(?, 'unixepoch')`,
+    [before]
+  );
+  const found = new Map(); // slug -> name
+  for (const r of rows) {
+    try {
+      const t = (await query(TOURNAMENT_BY_ID, { id: r.startgg_id }))?.tournament;
+      if (t?.slug) found.set(t.slug, t.name);
+    } catch (err) {
+      console.error(`[sync-upcoming] start.gg lookup for tracked "${r.name}" failed: ${err.message}`);
+    }
+  }
+  return found;
+}
+
 // Future page: upcoming major tournaments + their top seeds.
 async function syncUpcoming({ months = 12, top = 8, dryRun = false } = {}) {
   if (!dryRun) await applyFuturesMetaSchema();
@@ -615,6 +643,14 @@ async function syncUpcoming({ months = 12, top = 8, dryRun = false } = {}) {
   }
   if (adoptable > 0) {
     console.log(`[sync-upcoming] +${adoptable} Liquipedia-announced tournament(s) now on start.gg.`);
+  }
+
+  if (!dryRun) {
+    let revisit = 0;
+    for (const [slug, name] of await findTrackedUpcomingSlugs(before)) {
+      if (!seen.has(slug)) { seen.set(slug, name); revisit++; }
+    }
+    if (revisit > 0) console.log(`[sync-upcoming] +${revisit} already-tracked tournament(s) outside the brand search.`);
   }
 
   let totalEvents = 0, totalPlayers = 0, withData = 0, countdownOnly = 0;
@@ -662,7 +698,7 @@ async function syncRecentResults({ days = 30, minEntrants = 0 } = {}) {
   return { tournaments: withData, matches: totalMatches };
 }
 
-module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, upsertGame, findPlaceholderSlugs, getTrackedGameIds, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
+module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, upsertGame, findPlaceholderSlugs, findTrackedUpcomingSlugs, getTrackedGameIds, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
 
 // CLI: `node scripts/sync-upcoming.js [--months N] [--top N] [--dry-run] [--results]`
 if (require.main === module) {
