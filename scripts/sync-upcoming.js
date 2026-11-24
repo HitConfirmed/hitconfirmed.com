@@ -326,9 +326,28 @@ async function processTournament(slug, args) {
   // page's waiting-room pill can show what games a tournament will feature even
   // before any entrant seedings exist.
   if (!args.dryRun && tournamentId) {
+    const keepGameIds = [];
     for (const ev of trackedEvents) {
       const gameId = await upsertGame(ev.videogame);
       await upsertTournamentGame(tournamentId, gameId);
+      keepGameIds.push(gameId);
+    }
+    // tournament_games was add-only, so a game start.gg no longer lists here
+    // (an event the organizer removed, or one only Liquipedia listed before
+    // start.gg adopted the placeholder) stayed on the card forever. Real case:
+    // MINDSET 2026 kept showing Invincible Vs. with no such event on start.gg.
+    // Only with the full tracked-id list (so an auto-tracked game isn't
+    // mistaken for missing), and never a game anything hangs off already.
+    if (args.trackedIds) {
+      await db.runAsync(
+        `DELETE FROM tournament_games
+         WHERE tournament_id = ? AND game_id NOT IN (${keepGameIds.map(() => '?').join(',')})
+           AND NOT EXISTS (SELECT 1 FROM players_games_tournaments p
+                           WHERE p.tournament_id = tournament_games.tournament_id AND p.game_id = tournament_games.game_id)
+           AND NOT EXISTS (SELECT 1 FROM set_markets m
+                           WHERE m.tournament_id = tournament_games.tournament_id AND m.game_id = tournament_games.game_id)`,
+        [tournamentId, ...keepGameIds]
+      );
     }
   }
 
