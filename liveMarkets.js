@@ -876,7 +876,13 @@ async function getUpcoming() {
            AND is_live = 0
            AND NOT EXISTS (SELECT 1 FROM bracket_history bh3 WHERE bh3.tournament_id = t.id)
            AND EXISTS (SELECT 1 FROM tournament_games tg3 WHERE tg3.tournament_id = t.id)
-           AND date(date, '+14 days') >= date('now'))
+           -- A Liquipedia-only placeholder (liquipedia_page set) never gets
+           -- results, so the bridge only kept a finished event on the page as
+           -- if it were upcoming (real case: "Kampeonato Brasileiro 2026
+           -- Finals", the MK1 finals at Battle Coliseum, still listed 6 days
+           -- later with just MK1 while Battle Coliseum itself had left). Its
+           -- date is the start day, so 3 days covers a weekend event.
+           AND date(date, CASE WHEN liquipedia_page IS NOT NULL THEN '+3 days' ELSE '+14 days' END) >= date('now'))
      ORDER BY date(date) DESC`
   );
   return Promise.all(tournaments.map(async (tournament) => {

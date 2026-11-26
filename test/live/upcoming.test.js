@@ -15,7 +15,7 @@ before(async () => {
   delete require.cache[require.resolve('../../liveMarkets')];
   db = require('../../db/db');
   lm = require('../../liveMarkets');
-  await db.runAsync(`CREATE TABLE tournaments (id INTEGER PRIMARY KEY, name TEXT, date TEXT, startgg_id TEXT, is_live INTEGER DEFAULT 0, logo_url TEXT, city TEXT, country TEXT)`);
+  await db.runAsync(`CREATE TABLE tournaments (id INTEGER PRIMARY KEY, name TEXT, date TEXT, startgg_id TEXT, is_live INTEGER DEFAULT 0, logo_url TEXT, city TEXT, country TEXT, liquipedia_page TEXT)`);
   await db.runAsync(`CREATE TABLE games (id INTEGER PRIMARY KEY, name TEXT)`);
   await db.runAsync(`CREATE TABLE players_games_tournaments (tournament_id INTEGER, game_id INTEGER, player_id INTEGER, seed_num INTEGER)`);
   await db.runAsync(`CREATE TABLE tournament_games (tournament_id INTEGER, game_id INTEGER, num_entrants INTEGER)`);
@@ -146,6 +146,18 @@ test('includes a manually-tracked event whose seeded date already passed but no 
 
   const result = await lm.getUpcoming();
   assert.deepEqual(result.map((r) => r.tournament.id), [1]);
+});
+
+test('a Liquipedia-only placeholder drops off 3 days after its start date (no 14-day bridge)', async () => {
+  const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  await addGame(10, 'Mortal Kombat 1');
+  await addTournament(1, 'Kampeonato Brasileiro 2026 Finals', daysAgo(6), { startggId: null });
+  await addTournament(2, 'Weekend Placeholder, Day 2', daysAgo(2), { startggId: null });
+  await db.runAsync("UPDATE tournaments SET liquipedia_page = name");
+  await db.runAsync('INSERT INTO tournament_games (tournament_id, game_id) VALUES (1, 10), (2, 10)');
+
+  const result = await lm.getUpcoming();
+  assert.deepEqual(result.map((r) => r.tournament.id), [2]);
 });
 
 test('excludes a manually-tracked stub whose seeded date is well past the 14-day bridge window', async () => {
