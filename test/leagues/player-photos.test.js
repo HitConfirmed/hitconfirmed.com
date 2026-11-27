@@ -139,3 +139,31 @@ test('a non-image download is rejected and not stored', async () => {
   const n = await db.getAsync('SELECT COUNT(*) c FROM league_player_photos WHERE data IS NOT NULL');
   assert.strictEqual(n.c, 0);
 });
+
+// ---- season logo ----------------------------------------------------------
+test('season logo: prefers the dark infobox image, stores it, re-checks weekly, keeps it when unchanged', async () => {
+  await db.runAsync('DELETE FROM league_season_logos');
+  const calls = [];
+  const query = async (p) => {
+    calls.push(p.prop);
+    if (p.prop === 'revisions') {
+      return { query: { pages: { 1: { title: 'Street Fighter League/Japan/2026', revisions: [{ slots: { main: { '*': '{{Infobox league\n|image=SFL light.png\n|imagedark=SFL_dark.png\n}}' } } }] } } } };
+    }
+    assert.strictEqual(p.titles, 'File:SFL dark.png');
+    return { query: { pages: { 2: { title: 'File:SFL dark.png', imageinfo: [{ thumburl: 'https://liquipedia.net/t/sfl.png', mime: 'image/png' }] } } } };
+  };
+  const fetched = [];
+  const fetchImage = async (u) => { fetched.push(u); return { contentType: 'image/png', data: Buffer.from('logo') }; };
+  assert.strictEqual(await sync.syncSeasonLogo(1, 'Street_Fighter_League/Japan/2026', { query, fetchImage, apiGapMs: 0, now: NOW }), 'downloaded');
+  assert.deepStrictEqual(fetched, ['https://liquipedia.net/t/sfl.png']);
+  assert.strictEqual((await mk.getSeason('s')).logoUrl, '/api/leagues/season-logo/s');
+
+  // Within a week: no requests at all.
+  calls.length = 0;
+  assert.strictEqual(await sync.syncSeasonLogo(1, 'X', { query, fetchImage, apiGapMs: 0, now: NOW + DAY }), null);
+  assert.deepStrictEqual(calls, []);
+  // A week on, same file: only the wikitext is read, nothing re-downloaded.
+  assert.strictEqual(await sync.syncSeasonLogo(1, 'X', { query, fetchImage, apiGapMs: 0, now: NOW + 8 * DAY }), 'kept');
+  assert.deepStrictEqual(calls, ['revisions']);
+  assert.strictEqual(fetched.length, 1);
+});

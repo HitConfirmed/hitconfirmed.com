@@ -5,8 +5,6 @@
   font-family: 'Hanken Grotesk', sans-serif;
   color: var(--text);
 }
-.lg-head h1 { font-family: 'Saira', sans-serif; font-weight: 800; font-size: 30px; letter-spacing: -0.01em; margin: 0 0 4px; }
-.lg-sub { color: var(--muted); margin: 0 0 18px; }
 .lg-muted { color: var(--muted); text-align: center; padding: 28px 0; }
 .lg-muted-inline { color: var(--muted); font-weight: 400; }
 .lg-error { color: var(--live-text); margin: 8px 0; }
@@ -21,12 +19,19 @@
   background: var(--card); color: var(--text); font: 600 14px 'Saira', sans-serif; cursor: pointer;
 }
 .lg-chip.active { background: var(--gold-tint); border-color: var(--gold); color: var(--gold); }
+.lg-chip-live {
+  width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--live-text);
+  box-shadow: 0 0 6px 1px var(--live-tint); animation: lgLivePulse 1.8s ease-in-out infinite;
+}
 .lg-chip-badge { background: var(--gold); color: var(--on-gold); border-radius: 999px; font-size: 11px; padding: 1px 7px; }
 
 .lg-hero {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
   background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; margin-bottom: 18px;
 }
+.lg-hero.is-live { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 14px 2px rgba(231,180,88,0.15); }
+.lg-hero-meta { flex: 1; min-width: 0; }
+.lg-season-logo { flex: none; width: 64px; height: 64px; object-fit: contain; }
 .lg-hero-name { font: 700 19px 'Saira', sans-serif; }
 .lg-hero-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .lg-status { flex: none; font: 700 11px 'Saira', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; padding: 5px 10px; border-radius: 999px; background: var(--surface); color: var(--muted); }
@@ -39,29 +44,85 @@
 .lg-tab.active { color: var(--text); border-bottom-color: var(--gold); }
 
 .lg-section { margin-bottom: 28px; }
-.lg-h2 { font: 700 13px 'Saira', sans-serif; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 12px; }
-.lg-round { margin-bottom: 18px; }
-.lg-round-title { font: 600 14px 'Saira', sans-serif; margin-bottom: 8px; }
+/* Section headers: same type as Home (.section-header h2) and Tournaments
+   (.brackets-section-label) - 18px Saira 800 caps, gold; "Happening Now" in
+   white like the Tournaments page. */
+.lg-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 12px; }
+.lg-section:first-child .lg-section-head, .lg-tabs + .lg-section .lg-section-head { margin-top: 0; }
+.lg-h2 {
+  margin: 0; font-family: 'Saira', sans-serif; font-weight: 800; font-size: 18px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--gold);
+}
+.lg-h2-now { color: #fff; }
+.lg-round { margin-bottom: 20px; }
+.lg-round-title {
+  font: 600 13px 'Saira', sans-serif; color: var(--muted); letter-spacing: .04em; text-transform: uppercase;
+  margin-bottom: 8px; padding-left: 2px;
+}
+.lg-match-list { display: flex; flex-direction: column; gap: 10px; }
 
-/* pick cards */
-.lg-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-.lg-pick-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px; min-width: 0; }
-.lg-pick-card.pending { opacity: 0.7; }
-.lg-pick-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+/* LIVE / match-day badges (same look as the Tournaments page's LIVE badge) */
+.lg-live-badge {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  background: var(--live-tint); color: #fff;
+  font: 800 12px 'Saira', sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  padding: 3px 8px 3px 6px; border-radius: 6px;
+}
+.lg-live-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--live-text);
+  box-shadow: 0 0 8px 2px var(--live-tint), 0 0 2px 1px var(--live-text);
+  animation: lgLivePulse 1.8s ease-in-out infinite;
+}
+.lg-today-badge {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  background: var(--gold); color: var(--on-gold);
+  font: 800 10px 'Saira', sans-serif; letter-spacing: .08em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: 4px;
+}
+@keyframes lgLivePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* Match card: broadcast-style board (lineup · logo · score/× · logo · lineup) */
+.lg-match { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; min-width: 0; overflow: hidden; }
+.lg-match.pending { opacity: 0.8; }
+.lg-match.is-live { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 14px 2px rgba(231,180,88,0.15); }
+.lg-match.is-today { border-color: rgba(231,180,88,0.55); }
+.lg-match-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.lg-match-meta-left { display: inline-flex; align-items: center; gap: 8px; }
+
+.lg-board {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(76px, 120px) auto minmax(76px, 120px) minmax(0, 1fr);
+  align-items: center; gap: 12px;
+}
+.lg-board-team { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; text-align: center; color: var(--text); }
+.lg-board-team.lost { opacity: 0.55; }
+.lg-board-name { font: 700 13px 'Saira', sans-serif; line-height: 1.2; overflow-wrap: anywhere; }
+.lg-board-team.won .lg-board-name { color: var(--gold); }
+.lg-board-mid { display: flex; align-items: center; justify-content: center; min-width: 56px; }
+.lg-board-x { font: 300 34px 'Saira', sans-serif; color: var(--faint); line-height: 1; }
+
+.lg-lineup { display: flex; gap: 8px; min-width: 0; }
+.lg-lineup.left { justify-content: flex-end; }
+.lg-lineup.right { justify-content: flex-start; }
+.lg-lineup-player { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 58px; min-width: 0; }
+.lg-lineup .lg-player-photo { width: 52px; height: 52px; }
+.lg-lineup-name { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* pick buttons under the board */
+.lg-pick-row { display: grid; grid-template-columns: minmax(0, 1fr) 8px minmax(0, 1fr); align-items: stretch; margin-top: 12px; }
 .lg-lock { color: var(--gold); }
 .lg-lock.locked { color: var(--muted); }
-.lg-pick-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 8px; }
-.lg-vs { align-self: center; color: var(--faint); font: 600 12px 'Saira', sans-serif; }
 .lg-odds {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px;
   color: var(--text); cursor: pointer; font-family: inherit;
 }
-.lg-odds.static { cursor: default; justify-content: center; font-weight: 600; text-align: center; }
 .lg-odds:disabled { cursor: default; opacity: 0.75; }
 .lg-odds:not(:disabled):hover { border-color: var(--border-strong); }
 .lg-odds.selected { border-color: var(--gold); background: var(--gold-tint); }
-.lg-odds-name { font: 600 13px 'Saira', sans-serif; text-align: center; line-height: 1.2; overflow-wrap: anywhere; }
+.lg-odds-name { font: 600 13px 'Saira', sans-serif; text-align: left; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lg-odds-price { font: 800 17px 'Saira', sans-serif; color: var(--gold); font-variant-numeric: tabular-nums; }
 .lg-pick-foot { font-size: 12px; color: var(--faint); margin-top: 8px; text-align: center; }
 .lg-mine { margin-top: 8px; font-size: 13px; background: var(--win-tint); color: var(--win); border-radius: 8px; padding: 6px 10px; }
@@ -83,22 +144,20 @@
 }
 
 /* results */
-.lg-result { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 6px; overflow: hidden; }
-.lg-result-main {
-  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px;
-  background: none; border: none; color: var(--text); padding: 10px 12px; cursor: pointer; font-family: inherit;
-}
-.lg-result-main:disabled { cursor: default; }
-.lg-res-team { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); }
-.lg-res-team.left { justify-content: flex-end; text-align: right; }
-.lg-res-team.won { color: var(--text); font-weight: 700; }
-.lg-res-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Saira', sans-serif; }
-.lg-res-score { font: 800 16px 'Saira', sans-serif; font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
-.lg-res-colon { color: var(--faint); margin: 0 4px; }
-.lg-sets { border-top: 1px solid var(--border); padding: 6px 12px 10px; background: var(--surface); }
-.lg-set { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; font-size: 13px; color: var(--muted); padding: 3px 0; }
-.lg-set .left { text-align: right; }
-.lg-set .won { color: var(--text); font-weight: 600; }
+.lg-result-main { display: block; color: var(--text); font-family: inherit; }
+.lg-result-main.clickable { cursor: pointer; border-radius: 10px; }
+.lg-result-main.clickable:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+.lg-result-toggle { display: block; text-align: center; font-size: 12px; color: var(--faint); margin-top: 8px; }
+.lg-result-main.clickable:hover .lg-result-toggle { color: var(--muted); }
+.lg-res-score { font: 800 24px 'Saira', sans-serif; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
+.lg-res-colon { color: var(--faint); margin: 0 6px; }
+.lg-sets { border-top: 1px solid var(--border); margin: 10px -14px -12px; padding: 8px 14px 12px; background: var(--surface); }
+.lg-set { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; font-size: 14px; color: var(--muted); padding: 4px 0; }
+.lg-set-player { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lg-set-player.left { justify-content: flex-end; text-align: right; }
+.lg-set-player.won { color: var(--text); font-weight: 600; }
+.lg-set-player:not(.won) .lg-player-photo { opacity: 0.6; }
+.lg-set-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lg-set-score { font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
 
 /* standings */
@@ -144,10 +203,26 @@
 .lg-source { color: var(--faint); font-size: 12px; text-align: center; margin-top: 24px; }
 .lg-source a { color: var(--muted); }
 
+/* Narrower: lineups move under their team, two columns. */
+@media (max-width: 760px) {
+  .lg-board { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); row-gap: 10px; }
+  .lg-board > .lg-lineup.left { grid-column: 1; grid-row: 2; justify-content: center; }
+  .lg-board > .lg-lineup.right { grid-column: 3; grid-row: 2; justify-content: center; }
+  .lg-board > .lg-board-team.left { grid-column: 1; grid-row: 1; }
+  .lg-board > .lg-board-mid { grid-column: 2; grid-row: 1; }
+  .lg-board > .lg-board-team:not(.left) { grid-column: 3; grid-row: 1; }
+  .lg-lineup { flex-wrap: wrap; gap: 4px; }
+  .lg-lineup-player { width: 40px; }
+  .lg-lineup .lg-player-photo { width: 36px; height: 36px; }
+  .lg-lineup-name { font-size: 10px; }
+}
 @media (max-width: 600px) {
   .leagues-page { padding: 22px 16px 100px; }
-  .lg-head h1 { font-size: 24px; }
-  .lg-pick-grid, .lg-standings { grid-template-columns: 1fr; }
-  .lg-hero { flex-direction: column; align-items: flex-start; }
-  .lg-res-score, .lg-set-score { min-width: 48px; }
+  .lg-standings { grid-template-columns: 1fr; }
+  .lg-hero { flex-wrap: wrap; }
+  .lg-season-logo { width: 48px; height: 48px; }
+  .lg-res-score { font-size: 20px; }
+  .lg-set { gap: 6px; font-size: 13px; }
+  .lg-set-score { min-width: 44px; }
+  .lg-set .lg-player-photo { width: 24px !important; height: 24px !important; }
 }
