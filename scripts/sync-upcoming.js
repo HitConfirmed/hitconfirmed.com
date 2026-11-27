@@ -465,7 +465,7 @@ async function linkPendingGames(slug, trackedIds) {
 }
 
 // Find unique tournament slugs matching the curated brands in a date window.
-async function findBrandTournaments(query, after, before, ids = GAME_IDS) {
+async function findBrandTournaments(query, after, before, ids = GAME_IDS, gqlFn = gql) {
   const seen = new Map(); // slug -> name
   // Page through each brand's matches (most brands fit in one page; World Warrior
   // spans several across all regions). Stop a brand once a short page comes back.
@@ -474,7 +474,7 @@ async function findBrandTournaments(query, after, before, ids = GAME_IDS) {
     for (let page = 1; page <= MAX_PAGES; page++) {
       let nodes;
       try {
-        const data = await gql(query, { name: brand.search, after, before, ids, page });
+        const data = await gqlFn(query, { name: brand.search, after, before, ids, page });
         nodes = data?.tournaments?.nodes || [];
       } catch (err) {
         console.error(`Brand "${brand.search}" p${page} search failed: ${err.message}`);
@@ -497,9 +497,14 @@ async function findBrandTournaments(query, after, before, ids = GAME_IDS) {
           }
           continue;
         }
-        // Skip the "... Community Tournaments" companion pages start.gg spins up
-        // for side/legacy games at a major — the main bracket is the real event.
-        if (/\bcommunity tournaments?\b/i.test(t.name)) continue;
+        // Skip companion pages start.gg hosts alongside a major ("... Community
+        // Tournaments", "... Side Tourneys", "(pending approval)", "Pre-...") —
+        // the main bracket is the real event. Same COMPANION_PAGE filter the
+        // placeholder lookup below uses. Real case (2026-11-27): "Evo Singapore
+        // 2027 Side Tourneys by Rocket Punch (pending approval)", a 0-entrant
+        // third-party SoulCalibur VI page, passed /^evo\b/ and was listed on the
+        // Tournaments page as its own major next to Evo Singapore 2027.
+        if (COMPANION_PAGE.test(t.name)) continue;
         seen.set(t.slug, t.name);
       }
       if (nodes.length < 25) break; // last page for this brand
@@ -698,7 +703,7 @@ async function syncRecentResults({ days = 30, minEntrants = 0 } = {}) {
   return { tournaments: withData, matches: totalMatches };
 }
 
-module.exports = { syncUpcoming, syncRecentResults, processTournament, upsertTournament, upsertGame, findPlaceholderSlugs, findTrackedUpcomingSlugs, getTrackedGameIds, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
+module.exports = { syncUpcoming, syncRecentResults, processTournament, findBrandTournaments, upsertTournament, upsertGame, findPlaceholderSlugs, findTrackedUpcomingSlugs, getTrackedGameIds, pickTopSeeds, GAME_IDS, BRANDS, normalizeName };
 
 // CLI: `node scripts/sync-upcoming.js [--months N] [--top N] [--dry-run] [--results]`
 if (require.main === module) {
