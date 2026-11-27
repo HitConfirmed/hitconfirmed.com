@@ -17,7 +17,7 @@ before(async () => {
   delete require.cache[require.resolve('../../liveMarkets')];
   db = require('../../db/db');
   lm = require('../../liveMarkets');
-  await db.runAsync(`CREATE TABLE tournaments (id INTEGER PRIMARY KEY, name TEXT, date TEXT, city TEXT, country TEXT, startgg_id TEXT, is_live INTEGER DEFAULT 0, logo_url TEXT)`);
+  await db.runAsync(`CREATE TABLE tournaments (id INTEGER PRIMARY KEY, name TEXT, date TEXT, city TEXT, country TEXT, startgg_id TEXT, is_live INTEGER DEFAULT 0, logo_url TEXT, liquipedia_page TEXT)`);
   await db.runAsync(`CREATE TABLE tournament_games (tournament_id INTEGER, game_id INTEGER, num_entrants INTEGER)`);
   await db.runAsync(`CREATE TABLE players_games_tournaments (tournament_id INTEGER, game_id INTEGER, player_id INTEGER, seed_num INTEGER)`);
   await db.runAsync(`CREATE TABLE games (id INTEGER PRIMARY KEY, name TEXT)`);
