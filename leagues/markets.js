@@ -23,6 +23,7 @@ const economy = require('../economy');
 const { withWriteTx } = require('../txn');
 const { effectiveSubsidyCents, computeLiveOdds } = require('../liveOdds');
 const liveMarkets = require('../liveMarkets');
+const { LEAGUE_SEASONS } = require('./config');
 
 const err = (code, message) => Object.assign(new Error(message), { code });
 
@@ -215,6 +216,44 @@ async function cancelBet(userId, betId) {
 
 const logoUrl = (teamId, hasLogo) => (hasLogo ? `/api/leagues/team-logo/${teamId}` : null);
 
+// ---- live / match-day phase -------------------------------------------------
+// Liquipedia rarely lists a kickoff time for these leagues, so "live" can't
+// just be "start time passed". A match is:
+//   'live'  - unfinished, on (or the day after, for late-night overruns) its
+//             match day, and Liquipedia already shows sets or a team score;
+//             or it has a real start time (lock_at isn't local midnight) that
+//             has passed within the last LIVE_WINDOW_MS;
+//   'today' - unfinished and its match day is today in the league's time zone.
+// Anything else is null. Only drives display and sync cadence - never money.
+const LIVE_WINDOW_MS = 8 * 60 * 60 * 1000;
+const tzOffsetFor = (slug) => (LEAGUE_SEASONS.find((c) => c.slug === slug)?.tzOffsetHours ?? 0);
+const localDay = (ms, tz) => new Date(ms + tz * 3600 * 1000).toISOString().slice(0, 10);
+
+function matchPhase(m, tzOffsetHours = 0, now = Date.now()) {
+  if (m.finished || !m.match_date) return null;
+  const today = localDay(now, tzOffsetHours);
+  const yesterday = localDay(now - 86400000, tzOffsetHours);
+  const hasProgress = (m.sets_json && m.sets_json !== '[]') || m.team1_score != null || m.team2_score != null;
+  if (hasProgress && (m.match_date === today || m.match_date === yesterday)) return 'live';
+  const lock = m.lock_at ? Date.parse(m.lock_at) : NaN;
+  const [y, mo, d] = m.match_date.split('-').map(Number);
+  const midnight = Date.UTC(y, mo - 1, d) - tzOffsetHours * 3600 * 1000;
+  if (Number.isFinite(lock) && lock !== midnight && lock <= now && now - lock < LIVE_WINDOW_MS) return 'live';
+  return m.match_date === today ? 'today' : null;
+}
+
+// Seasons with a match live or on today (used to sync them more often).
+async function activeSeasonSlugs(now = Date.now()) {
+  const lo = new Date(now - 2 * 86400000).toISOString().slice(0, 10);
+  const hi = new Date(now + 2 * 86400000).toISOString().slice(0, 10);
+  const rows = await db.allAsync(
+    `SELECT s.slug, m.* FROM league_matches m JOIN league_seasons s ON s.id = m.season_id
+     WHERE m.finished = 0 AND m.match_date BETWEEN ? AND ? AND m.last_seen_at >= s.synced_at`, [lo, hi]);
+  const out = new Set();
+  for (const r of rows) if (matchPhase(r, tzOffsetFor(r.slug), now)) out.add(r.slug);
+  return [...out];
+}
+
 function seasonStatus(s, now = new Date()) {
   const today = now.toISOString().slice(0, 10);
   if (!s.start_date || s.start_date > today) return 'upcoming';
@@ -226,16 +265,35 @@ async function listSeasons() {
   const rows = await db.allAsync(`
     SELECT s.*,
       (SELECT COUNT(*) FROM league_teams t WHERE t.season_id = s.id) AS team_count,
+      (SELECT 1 FROM league_season_logos sl WHERE sl.season_id = s.id AND sl.data IS NOT NULL) AS has_logo,
       (SELECT COUNT(*) FROM league_matches m WHERE m.season_id = s.id AND m.last_seen_at >= s.synced_at AND m.finished = 0) AS open_matches,
       (SELECT MIN(m.match_date) FROM league_matches m WHERE m.season_id = s.id AND m.last_seen_at >= s.synced_at AND m.finished = 0) AS next_match_date,
       (SELECT COUNT(*) FROM league_markets lm JOIN league_matches m ON m.id = lm.match_id
          WHERE m.season_id = s.id AND lm.state = 'open' AND m.lock_at > ?) AS bettable
     FROM league_seasons s ORDER BY s.start_date DESC`, [new Date().toISOString()]);
   const statusRank = { live: 0, upcoming: 1, complete: 2 };
+  const now = Date.now();
+  const lo = new Date(now - 2 * 86400000).toISOString().slice(0, 10);
+  const hi = new Date(now + 2 * 86400000).toISOString().slice(0, 10);
+  const soon = await db.allAsync(
+    `SELECT m.* FROM league_matches m JOIN league_seasons s ON s.id = m.season_id
+     WHERE m.finished = 0 AND m.match_date BETWEEN ? AND ? AND m.last_seen_at >= s.synced_at`, [lo, hi]);
+  const idToSlug = new Map(rows.map((s) => [s.id, s.slug]));
+  const phases = new Map();
+  for (const m of soon) {
+    const slug = idToSlug.get(m.season_id);
+    const ph = matchPhase(m, tzOffsetFor(slug), now);
+    if (!ph) continue;
+    const c = phases.get(slug) || { live: 0, today: 0 };
+    c[ph] += 1;
+    phases.set(slug, c);
+  }
   return rows.map((s) => ({
     slug: s.slug, name: s.name, shortName: s.short_name, region: s.region, game: s.game_name,
     startDate: s.start_date, endDate: s.end_date, teamCount: s.team_count,
+    logoUrl: s.has_logo ? `/api/leagues/season-logo/${s.slug}` : null,
     nextMatchDate: s.next_match_date, bettable: s.bettable, status: seasonStatus(s),
+    liveMatches: phases.get(s.slug)?.live || 0, todayMatches: phases.get(s.slug)?.today || 0,
     liquipediaUrl: `https://liquipedia.net/fighters/${s.liquipedia_page}`,
   })).sort((a, b) => statusRank[a.status] - statusRank[b.status] || (b.startDate || '').localeCompare(a.startDate || ''));
 }
@@ -268,7 +326,9 @@ function standingsFrom(teams, matches) {
 }
 
 async function getSeason(slug, now = Date.now()) {
-  const s = await db.getAsync('SELECT * FROM league_seasons WHERE slug = ?', [slug]);
+  const s = await db.getAsync(
+    `SELECT s.*, (SELECT 1 FROM league_season_logos sl WHERE sl.season_id = s.id AND sl.data IS NOT NULL) AS has_logo
+     FROM league_seasons s WHERE s.slug = ?`, [slug]);
   if (!s) return null;
   const teams = await db.allAsync(
     `SELECT t.*, (SELECT 1 FROM league_team_logos l WHERE l.team_id = t.id AND l.data IS NOT NULL) AS has_logo
@@ -298,6 +358,7 @@ async function getSeason(slug, now = Date.now()) {
       lockAt: m.lock_at, bestOf: m.best_of, team1Id: m.team1_id, team2Id: m.team2_id,
       score1: m.team1_score, score2: m.team2_score, winnerTeamId: m.winner_team_id, finished: !!m.finished,
       sets: m.sets_json ? JSON.parse(m.sets_json) : [],
+      phase: matchPhase(m, tzOffsetFor(s.slug), now),
       market: mk ? {
         id: mk.id, state: effectiveState(mk, m.lock_at, now), team1Odds: mk.p1_live_odds, team2Odds: mk.p2_live_odds,
         poolCents: mk.p1_pool_cents + mk.p2_pool_cents, picks: pickCount.get(mk.id) || 0, winnerTeamId: mk.winner_team_id,
@@ -307,6 +368,7 @@ async function getSeason(slug, now = Date.now()) {
   return {
     slug: s.slug, name: s.name, shortName: s.short_name, region: s.region, game: s.game_name,
     startDate: s.start_date, endDate: s.end_date, syncedAt: s.synced_at,
+    logoUrl: s.has_logo ? `/api/leagues/season-logo/${s.slug}` : null,
     liquipediaUrl: `https://liquipedia.net/fighters/${s.liquipedia_page}`,
     teams: teamOut, matches: matchOut, standings: standingsFrom(teams, matches),
   };
@@ -332,5 +394,5 @@ async function getUserBets(userId) {
 module.exports = {
   openingProbabilities, effectiveState, isLocked,
   openMarket, closeMarket, settleMarket, voidMarket, refreshUnbetMarket, reconcileMatchMarket,
-  placeBet, cancelBet, listSeasons, getSeason, getUserBets, standingsFrom,
+  placeBet, cancelBet, listSeasons, getSeason, getUserBets, standingsFrom, matchPhase, activeSeasonSlugs,
 };

@@ -24,6 +24,59 @@ const TeamLogo = ({ team, size = 28 }) => {
   return <span className="lg-logo lg-logo-fallback" style={{ width: size, height: size }} aria-hidden="true">{(team?.shortName || team?.name || '?').slice(0, 3)}</span>;
 };
 
+// Liquipedia infobox photo, or the player's initial when there is none.
+const PlayerPhoto = ({ player, size }) => {
+  const [failed, setFailed] = useState(false);
+  const style = size ? { width: size, height: size } : undefined;
+  if (player?.photoUrl && !failed) {
+    return <img className="lg-player-photo" style={style} src={player.photoUrl} alt="" loading="lazy" onError={() => setFailed(true)} />;
+  }
+  return <span className="lg-player-photo lg-player-photo-fallback" style={style} aria-hidden="true">{(player?.name || '?').charAt(0).toUpperCase()}</span>;
+};
+
+// A set's player -> their roster entry (for the photo): that team's roster
+// first, then anyone in the season with the same name.
+const findPlayer = (name, team, teams) => {
+  const key = String(name || '').toLowerCase();
+  const own = team?.players?.find((p) => p.name.toLowerCase() === key);
+  if (own) return own;
+  for (const t of teams.values()) {
+    const p = t.players?.find((x) => x.name.toLowerCase() === key);
+    if (p) return p;
+  }
+  return { name };
+};
+
+// Who to show on a team's side: for a finished match, the players who
+// actually played (from the sets); before and during it, the roster.
+const lineupFor = (match, side, team, teams) => {
+  const played = match.sets?.map((s) => (side === 1 ? s.p1 : s.p2)).filter(Boolean) || [];
+  if (match.finished && played.length) return [...new Set(played)].map((n) => findPlayer(n, team, teams));
+  return team?.players?.length ? team.players : [...new Set(played)].map((n) => findPlayer(n, team, teams));
+};
+
+const Lineup = ({ players, side }) => (
+  <div className={`lg-lineup ${side === 1 ? 'left' : 'right'}`} aria-label="Players">
+    {players.slice(0, 5).map((p) => (
+      <span key={p.name} className="lg-lineup-player" title={p.name}>
+        <PlayerPhoto player={p} />
+        <span className="lg-lineup-name">{p.name}</span>
+      </span>
+    ))}
+  </div>
+);
+
+const SeasonLogo = ({ url }) => {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) return null;
+  return <img className="lg-season-logo" src={url} alt="" onError={() => setFailed(true)} />;
+};
+
+const LiveBadge = () => (
+  <span className="lg-live-badge"><span className="lg-live-dot" aria-hidden="true" />LIVE</span>
+);
+const TodayBadge = () => <span className="lg-today-badge">Match day</span>;
+
 const groupBy = (list, keyFn) => {
   const out = [];
   const idx = new Map();
@@ -70,21 +123,24 @@ const PickCard = ({ match, teams, isLoggedIn, myBets, onPlaced }) => {
   const oddsBtn = (n, team, o) => (
     <button type="button" className={`lg-odds${side === n ? ' selected' : ''}`} disabled={!open}
       onClick={() => setSide(side === n ? null : n)} aria-pressed={side === n}>
-      <TeamLogo team={team} size={34} />
       <span className="lg-odds-name">{team?.name || 'TBD'}</span>
       <span className="lg-odds-price">{o ? o.toFixed(2) : '—'}</span>
     </button>
   );
 
   return (
-    <div className="lg-pick-card">
-      <div className="lg-pick-meta">
-        <span>{fmtDate(match.date)}{match.bestOf ? ` · ${match.bestOf}` : ''}</span>
+    <div className={`lg-match${match.phase === 'live' ? ' is-live' : match.phase === 'today' ? ' is-today' : ''}`}>
+      <div className="lg-match-meta">
+        <span className="lg-match-meta-left">
+          {match.phase === 'live' ? <LiveBadge /> : match.phase === 'today' ? <TodayBadge /> : null}
+          {fmtDate(match.date)}{match.bestOf ? ` · ${match.bestOf}` : ''}
+        </span>
         <span className={open ? 'lg-lock' : 'lg-lock locked'}>{open ? `Locks ${fmtLock(match.lockAt)}` : 'Locked · awaiting result'}</span>
       </div>
+      <MatchBoard match={match} t1={t1} t2={t2} teams={teams} />
       <div className="lg-pick-row">
         {oddsBtn(1, t1, mk.team1Odds)}
-        <span className="lg-vs">vs</span>
+        <span className="lg-vs" aria-hidden="true" />
         {oddsBtn(2, t2, mk.team2Odds)}
       </div>
       <div className="lg-pick-foot">{mk.picks} pick{mk.picks === 1 ? '' : 's'} · {fm(mk.poolCents)} pool</div>
@@ -111,28 +167,62 @@ const PickCard = ({ match, teams, isLoggedIn, myBets, onPlaced }) => {
   );
 };
 
-const ResultRow = ({ match, teams }) => {
-  const [open, setOpen] = useState(false);
-  const t1 = teams.get(match.team1Id), t2 = teams.get(match.team2Id);
+// The broadcast-style board: lineup · logo · score (or ×) · logo · lineup.
+const MatchBoard = ({ match, t1, t2, teams }) => {
   const w = match.winnerTeamId;
+  const hasScore = match.score1 != null || match.score2 != null;
+  const sideCls = (id) => (w ? (w === id ? ' won' : ' lost') : '');
   return (
-    <div className="lg-result">
-      <button type="button" className="lg-result-main" onClick={() => setOpen(!open)} aria-expanded={open} disabled={!match.sets.length}>
-        <span className={`lg-res-team left${w && w === match.team1Id ? ' won' : ''}`}><span className="lg-res-name">{t1?.name || 'TBD'}</span><TeamLogo team={t1} size={24} /></span>
-        <span className="lg-res-score">{match.score1 ?? '–'}<span className="lg-res-colon">:</span>{match.score2 ?? '–'}</span>
-        <span className={`lg-res-team${w && w === match.team2Id ? ' won' : ''}`}><TeamLogo team={t2} size={24} /><span className="lg-res-name">{t2?.name || 'TBD'}</span></span>
-      </button>
-      {open && (
-        <div className="lg-sets">
-          {match.sets.map((s, i) => (
-            <div key={i} className="lg-set">
-              <span className={`left${s.s1 > s.s2 ? ' won' : ''}`}>{s.p1}</span>
-              <span className="lg-set-score">{s.s1} – {s.s2}</span>
-              <span className={s.s2 > s.s1 ? 'won' : ''}>{s.p2}</span>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="lg-board">
+      <Lineup players={lineupFor(match, 1, t1, teams)} side={1} />
+      <div className={`lg-board-team left${sideCls(match.team1Id)}`}>
+        <TeamLogo team={t1} size={48} />
+        <span className="lg-board-name">{t1?.name || 'TBD'}</span>
+      </div>
+      <div className="lg-board-mid">
+        {hasScore
+          ? <span className="lg-res-score">{match.score1 ?? 0}<span className="lg-res-colon">:</span>{match.score2 ?? 0}</span>
+          : <span className="lg-board-x" aria-label="versus">×</span>}
+      </div>
+      <div className={`lg-board-team${sideCls(match.team2Id)}`}>
+        <TeamLogo team={t2} size={48} />
+        <span className="lg-board-name">{t2?.name || 'TBD'}</span>
+      </div>
+      <Lineup players={lineupFor(match, 2, t2, teams)} side={2} />
+    </div>
+  );
+};
+
+const SetList = ({ match, t1, t2, teams }) => (
+  <div className="lg-sets">
+    {match.sets.map((s, i) => (
+      <div key={i} className="lg-set">
+        <span className={`lg-set-player left${s.s1 > s.s2 ? ' won' : ''}`}><span className="lg-set-name">{s.p1}</span><PlayerPhoto player={findPlayer(s.p1, t1, teams)} size={30} /></span>
+        <span className="lg-set-score">{s.s1} – {s.s2}</span>
+        <span className={`lg-set-player${s.s2 > s.s1 ? ' won' : ''}`}><PlayerPhoto player={findPlayer(s.p2, t2, teams)} size={30} /><span className="lg-set-name">{s.p2}</span></span>
+      </div>
+    ))}
+  </div>
+);
+
+// A played (or in-progress) match. Live ones start expanded.
+const ResultRow = ({ match, teams }) => {
+  const live = match.phase === 'live';
+  const [open, setOpen] = useState(live);
+  const t1 = teams.get(match.team1Id), t2 = teams.get(match.team2Id);
+  return (
+    <div className={`lg-match lg-result${live ? ' is-live' : ''}`}>
+      {live && <div className="lg-match-meta"><span className="lg-match-meta-left"><LiveBadge />{fmtDate(match.date)}{match.bestOf ? ` · ${match.bestOf}` : ''}</span></div>}
+      {/* A div, not a <button>: the board holds block content. */}
+      <div className={`lg-result-main${match.sets.length ? ' clickable' : ''}`}
+        {...(match.sets.length ? {
+          role: 'button', tabIndex: 0, 'aria-expanded': open, onClick: () => setOpen(!open),
+          onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open); } },
+        } : {})}>
+        <MatchBoard match={match} t1={t1} t2={t2} teams={teams} />
+        {match.sets.length > 0 && <span className="lg-result-toggle">{open ? 'Hide sets ▲' : `Show ${match.sets.length} sets ▼`}</span>}
+      </div>
+      {open && <SetList match={match} t1={t1} t2={t2} teams={teams} />}
     </div>
   );
 };
@@ -162,15 +252,6 @@ const Standings = ({ standings, teams }) => (
   </div>
 );
 
-// Liquipedia infobox photo, or the player's initial when there is none.
-const PlayerPhoto = ({ player }) => {
-  const [failed, setFailed] = useState(false);
-  if (player.photoUrl && !failed) {
-    return <img className="lg-player-photo" src={player.photoUrl} alt="" loading="lazy" onError={() => setFailed(true)} />;
-  }
-  return <span className="lg-player-photo lg-player-photo-fallback" aria-hidden="true">{(player.name || '?').charAt(0).toUpperCase()}</span>;
-};
-
 const Teams = ({ teams }) => (
   <div className="lg-teams">
     {teams.map((t) => (
@@ -188,7 +269,7 @@ const MyPicks = ({ bets }) => {
   const label = { placed: 'Open', won: 'Won', lost: 'Lost', refunded: 'Refunded' };
   return (
     <section className="lg-section">
-      <h2 className="lg-h2">Your picks</h2>
+      <div className="lg-section-head"><h2 className="lg-h2">Your Picks</h2></div>
       <div className="lg-mypicks">
         {bets.map((b) => (
           <div key={b.id} className={`lg-mypick ${b.state}`}>
@@ -241,13 +322,37 @@ const Leagues = ({ isLoggedIn }) => {
   }, [isLoggedIn]);
 
   useEffect(() => { setSeason(null); loadSeason(); }, [loadSeason]);
+  // While a match is live or on today, keep the page fresh (the server
+  // re-syncs those seasons from Liquipedia every 15 min on match days).
+  const active = (season?.matches || []).some((m) => m.phase);
+  useEffect(() => {
+    if (!active) return undefined;
+    const id = setInterval(loadSeason, 60000);
+    return () => clearInterval(id);
+  }, [active, loadSeason]);
   useEffect(() => { loadBets(); }, [loadBets]);
 
   const teams = useMemo(() => new Map((season?.teams || []).map((t) => [t.id, t])), [season]);
-  const upcoming = useMemo(() => (season?.matches || []).filter((m) => !m.finished).sort(byDate), [season]);
+  const happening = useMemo(() => (season?.matches || []).filter((m) => m.phase)
+    .sort((a, b) => (a.phase === 'live' ? 0 : 1) - (b.phase === 'live' ? 0 : 1) || byDate(a, b)), [season]);
+  const upcoming = useMemo(() => (season?.matches || []).filter((m) => !m.finished && !m.phase).sort(byDate), [season]);
   const results = useMemo(() => (season?.matches || []).filter((m) => m.finished).reverse().sort((a, b) => byDate(b, a)), [season]);
   const seasonBets = bets.filter((b) => b.seasonSlug === slug);
   const onPlaced = () => { loadSeason(); loadBets(); };
+  // Live -> score + sets; open/locked market -> pick card; no market yet -> board only.
+  const renderMatch = (m) => {
+    if (m.phase === 'live') return <ResultRow key={m.id} match={m} teams={teams} />;
+    if (m.market) return <PickCard key={m.id} match={m} teams={teams} isLoggedIn={isLoggedIn} myBets={seasonBets} onPlaced={onPlaced} />;
+    return (
+      <div key={m.id} className={`lg-match pending${m.phase === 'today' ? ' is-today' : ''}`}>
+        <div className="lg-match-meta">
+          <span className="lg-match-meta-left">{m.phase === 'today' && <TodayBadge />}{fmtDate(m.date)}{m.bestOf ? ` · ${m.bestOf}` : ''}</span>
+          <span className="lg-lock locked">{m.team1Id && m.team2Id ? 'Picks not open' : 'Teams TBD'}</span>
+        </div>
+        <MatchBoard match={m} t1={teams.get(m.team1Id)} t2={teams.get(m.team2Id)} teams={teams} />
+      </div>
+    );
+  };
 
   if (error) return <div className="leagues-page"><p className="lg-error">{error}</p></div>;
   if (!seasons) return <div className="leagues-page"><p className="lg-muted">Loading…</p></div>;
@@ -256,15 +361,13 @@ const Leagues = ({ isLoggedIn }) => {
 
   return (
     <div className="leagues-page">
-      <header className="lg-head">
-        <h1>Team Leagues</h1>
-        <p className="lg-sub">Team-vs-team leagues like Street Fighter League. Pick the team that wins each match.</p>
-      </header>
+      <h1 className="sr-only">Team Leagues</h1>
 
       <div className="lg-chips" role="tablist" aria-label="League season">
         {seasons.map((s) => (
           <button key={s.slug} type="button" role="tab" aria-selected={s.slug === slug}
             className={`lg-chip${s.slug === slug ? ' active' : ''}`} onClick={() => { setSlug(s.slug); setTab('matches'); }}>
+            {s.liveMatches > 0 && <span className="lg-chip-live" aria-label="Live now" />}
             {s.shortName}
             {s.bettable > 0 && <span className="lg-chip-badge">{s.bettable}</span>}
           </button>
@@ -272,12 +375,15 @@ const Leagues = ({ isLoggedIn }) => {
       </div>
 
       {meta && (
-        <div className="lg-hero">
-          <div>
+        <div className={`lg-hero${meta.liveMatches > 0 ? ' is-live' : ''}`}>
+          <SeasonLogo key={meta.slug} url={meta.logoUrl} />
+          <div className="lg-hero-meta">
             <div className="lg-hero-name">{meta.name}</div>
             <div className="lg-hero-sub">{meta.game} · {meta.region} · {fmtRange(meta.startDate, meta.endDate)} · {meta.teamCount} teams</div>
           </div>
-          <span className={`lg-status ${meta.status}`}>{STATUS_LABEL[meta.status]}</span>
+          {meta.liveMatches > 0 ? <LiveBadge />
+            : meta.todayMatches > 0 ? <TodayBadge />
+              : <span className={`lg-status ${meta.status}`}>{STATUS_LABEL[meta.status]}</span>}
         </div>
       )}
 
@@ -293,32 +399,34 @@ const Leagues = ({ isLoggedIn }) => {
 
           {tab === 'matches' && (
             <>
+              {happening.length > 0 && (
+                <section className="lg-section">
+                  <div className="lg-section-head"><h2 className="lg-h2 lg-h2-now">Happening Now</h2></div>
+                  {groupBy(happening, roundKey).map((g) => (
+                    <div key={g.key} className="lg-round">
+                      <div className="lg-round-title">{g.key}</div>
+                      <div className="lg-match-list">{g.items.map((m) => renderMatch(m))}</div>
+                    </div>
+                  ))}
+                </section>
+              )}
               <section className="lg-section">
-                <h2 className="lg-h2">Upcoming</h2>
-                {upcoming.length === 0 && <p className="lg-muted">{meta?.status === 'complete' ? 'This season is over — see results below.' : 'No matches scheduled yet.'}</p>}
+                <div className="lg-section-head"><h2 className="lg-h2">Upcoming</h2></div>
+                {upcoming.length === 0 && <p className="lg-muted">{meta?.status === 'complete' ? 'This season is over — see results below.' : happening.length ? 'Nothing else scheduled yet.' : 'No matches scheduled yet.'}</p>}
                 {groupBy(upcoming, roundKey).map((g) => (
                   <div key={g.key} className="lg-round">
                     <div className="lg-round-title">{g.key}</div>
-                    <div className="lg-pick-grid">
-                      {g.items.map((m) => (m.market
-                        ? <PickCard key={m.id} match={m} teams={teams} isLoggedIn={isLoggedIn} myBets={seasonBets} onPlaced={onPlaced} />
-                        : (
-                          <div key={m.id} className="lg-pick-card pending">
-                            <div className="lg-pick-meta"><span>{fmtDate(m.date)}</span><span className="lg-lock locked">Teams TBD</span></div>
-                            <div className="lg-pick-row"><span className="lg-odds static">{teams.get(m.team1Id)?.name || 'TBD'}</span><span className="lg-vs">vs</span><span className="lg-odds static">{teams.get(m.team2Id)?.name || 'TBD'}</span></div>
-                          </div>
-                        )))}
-                    </div>
+                    <div className="lg-match-list">{g.items.map((m) => renderMatch(m))}</div>
                   </div>
                 ))}
               </section>
               <section className="lg-section">
-                <h2 className="lg-h2">Results</h2>
+                <div className="lg-section-head"><h2 className="lg-h2">Results</h2></div>
                 {results.length === 0 && <p className="lg-muted">No results yet.</p>}
                 {groupBy(results, roundKey).map((g) => (
                   <div key={g.key} className="lg-round">
                     <div className="lg-round-title">{g.key} · {fmtDate(g.items[0].date)}</div>
-                    {g.items.map((m) => <ResultRow key={m.id} match={m} teams={teams} />)}
+                    <div className="lg-match-list">{g.items.map((m) => <ResultRow key={m.id} match={m} teams={teams} />)}</div>
                   </div>
                 ))}
               </section>

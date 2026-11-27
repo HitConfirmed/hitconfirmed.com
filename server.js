@@ -806,6 +806,22 @@ app.get('/api/leagues/team-logo/:id', async (req, res) => {
   }
 });
 
+// League/season logo from the season page's infobox (leagues/sync.js syncSeasonLogo).
+app.get('/api/leagues/season-logo/:slug', async (req, res) => {
+  try {
+    const row = await db.getAsync(
+      `SELECT sl.content_type, sl.data FROM league_season_logos sl JOIN league_seasons s ON s.id = sl.season_id WHERE s.slug = ?`,
+      [String(req.params.slug)]);
+    if (!row || !row.data) return res.status(404).end();
+    res.set('Content-Type', row.content_type || 'image/png');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.send(row.data);
+  } catch (err) {
+    res.status(500).end();
+  }
+});
+
 // Player photos from Liquipedia infoboxes (leagues/sync.js syncPlayerPhotos).
 app.get('/api/leagues/player-photo/:id', async (req, res) => {
   try {
@@ -1329,41 +1345,53 @@ function scheduleManualEventAutoSync() {
 }
 
 // Team leagues (leagues/sync.js): Liquipedia only, no start.gg token needed.
-// Every 3h - results land on Liquipedia hours after a league night, and each
-// season costs 2-3 rate-limited (30s) requests. Finished seasons skip
-// themselves to once a day. Same restart-safe app_state pattern as above.
+// Full pass every 3h - each season costs 2-3 rate-limited (30s) requests, and
+// finished seasons skip themselves to once a day. While any league match is
+// live or on today, a quick pass every 15 min re-syncs just those seasons so
+// live scores and results show up promptly. Same restart-safe app_state
+// pattern as above (the stored time is the last FULL pass).
 function scheduleLeagueSync() {
   const { syncAllLeagues } = require('./leagues/sync');
-  const CHECK_MS = 3 * 60 * 60 * 1000;
+  const { activeSeasonSlugs } = require('./leagues/markets');
+  const FULL_MS = 3 * 60 * 60 * 1000;
+  const ACTIVE_MS = 15 * 60 * 1000;
   const LAST_RUN_KEY = 'last_league_sync_at';
+  let lastFull = null;
+  const nextDelay = async () => {
+    const untilFull = lastFull ? Math.max(0, FULL_MS - (Date.now() - lastFull)) : 0;
+    let active = [];
+    try { active = await activeSeasonSlugs(); } catch (err) { console.error('League active check failed:', err.message); }
+    return active.length ? Math.min(ACTIVE_MS, untilFull) : untilFull;
+  };
   const attempt = async () => {
+    const full = !lastFull || Date.now() - lastFull >= FULL_MS;
     try {
-      await syncAllLeagues();
+      await syncAllLeagues(full ? {} : { activeOnly: true });
     } catch (err) {
       console.error('League sync failed:', err.message);
     }
-    try {
-      await db.runAsync(
-        `INSERT INTO app_state (key, value) VALUES (?, ?)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-        [LAST_RUN_KEY, new Date().toISOString()]
-      );
-    } catch (err) {
-      console.error(`Failed to record ${LAST_RUN_KEY}:`, err.message);
+    if (full) {
+      lastFull = Date.now();
+      try {
+        await db.runAsync(
+          `INSERT INTO app_state (key, value) VALUES (?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+          [LAST_RUN_KEY, new Date(lastFull).toISOString()]
+        );
+      } catch (err) {
+        console.error(`Failed to record ${LAST_RUN_KEY}:`, err.message);
+      }
     }
-    setTimeout(attempt, CHECK_MS);
+    setTimeout(attempt, await nextDelay());
   };
   (async () => {
-    let lastRun = null;
     try {
       const row = await db.getAsync('SELECT value FROM app_state WHERE key = ?', [LAST_RUN_KEY]);
-      lastRun = row ? new Date(row.value).getTime() : null;
+      lastFull = row ? new Date(row.value).getTime() : null;
     } catch (err) {
       console.error(`Failed to read ${LAST_RUN_KEY}:`, err.message);
     }
-    const elapsed = lastRun ? Date.now() - lastRun : Infinity;
-    const initialDelay = elapsed >= CHECK_MS ? 0 : CHECK_MS - elapsed;
-    setTimeout(attempt, initialDelay);
+    setTimeout(attempt, await nextDelay());
   })();
 }
 

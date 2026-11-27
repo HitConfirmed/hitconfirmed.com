@@ -74,3 +74,23 @@ test('places a pick for the chosen team', async () => {
     expect(JSON.parse(post[1].body)).toEqual({ marketId: 77, teamId: 1, amountCents: 5000 });
   });
 });
+
+test('shows live matches under Happening Now with a LIVE badge, sets and player photos', async () => {
+  const live = { ...JAPAN, matches: [
+    ...JAPAN.matches,
+    { id: 12, stage: 'Regular Season', round: 'Week 9', division: 'Division F', date: '2026-11-27', lockAt: '2026-11-26T15:00:00Z', bestOf: 'Bo3',
+      team1Id: 1, team2Id: 2, score1: 10, score2: 0, finished: false, phase: 'live',
+      sets: [{ p1: 'Daigo', p2: 'Seiya', s1: 2, s2: 1 }], market: { id: 78, state: 'closed', team1Odds: 1.8, team2Odds: 2.0, poolCents: 0, picks: 0 } },
+  ] };
+  const seasons = SEASONS.map((s) => (s.slug === 'sfl-japan-2026' ? { ...s, liveMatches: 1, logoUrl: '/api/leagues/season-logo/sfl-japan-2026' } : s));
+  mockFetchRoutes([['/api/leagues', seasons], ['/api/leagues/sfl-japan-2026', live]]);
+  renderWithRouter(<Leagues isLoggedIn={false} />);
+
+  await waitFor(() => expect(screen.getByText('Happening Now')).toBeInTheDocument());
+  // Hero + the live card both carry the badge; live cards start expanded.
+  expect(screen.getAllByText('LIVE').length).toBeGreaterThanOrEqual(2);
+  expect(document.querySelector('.lg-match.is-live')).toBeTruthy();
+  expect(screen.getByText('2 – 1')).toBeInTheDocument();
+  expect(document.querySelector('.lg-set img.lg-player-photo').getAttribute('src')).toBe('/api/leagues/player-photo/7');
+  expect(document.querySelector('img.lg-season-logo').getAttribute('src')).toBe('/api/leagues/season-logo/sfl-japan-2026');
+});

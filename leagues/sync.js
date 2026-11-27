@@ -271,6 +271,38 @@ async function syncPlayerPhotos(seasonId, {
   return stats;
 }
 
+// ---- season logo ----------------------------------------------------------
+// The league's own logo from the season page's infobox ("|imagedark=" first -
+// the app is dark - then "|image="), as a 240px thumbnail stored in
+// league_season_logos and served locally. Two small API queries; re-checked
+// weekly, and only re-downloaded when the infobox names a different file.
+const SEASON_LOGO_WIDTH = 240;
+async function syncSeasonLogo(seasonId, page, { query = liquipediaQuery, fetchImage = fetchLiquipediaImage, apiGapMs = API_GAP_MS, now = Date.now() } = {}) {
+  const cur = await db.getAsync('SELECT file, data IS NOT NULL AS has_data, checked_at FROM league_season_logos WHERE season_id = ?', [seasonId]);
+  if (cur?.checked_at && now - Date.parse(cur.checked_at) < PHOTO_RECHECK_MS) return null;
+  const checkedAt = new Date(now).toISOString();
+  const q1 = await query({ prop: 'revisions', rvprop: 'content', rvslots: 'main', redirects: '1', titles: wikiTitle(page) });
+  const text = Object.values(q1.query?.pages || {})[0]?.revisions?.[0]?.slots?.main?.['*'] || '';
+  const raw = infoboxField(text, 'imagedark') || infoboxField(text, 'image');
+  const file = raw ? wikiTitle(raw.replace(/^(file|image):/i, '').trim()) : null;
+  const note = () => db.runAsync(
+    `INSERT INTO league_season_logos (season_id, checked_at) VALUES (?, ?)
+     ON CONFLICT(season_id) DO UPDATE SET checked_at = excluded.checked_at`, [seasonId, checkedAt]);
+  if (!file || (cur?.has_data && cur.file === file)) { await note(); return file ? 'kept' : 'none'; }
+  await sleep(apiGapMs);
+  const q2 = await query({ prop: 'imageinfo', iiprop: 'url|mime', iiurlwidth: String(SEASON_LOGO_WIDTH), titles: `File:${file}` });
+  const info = Object.values(q2.query?.pages || {})[0]?.imageinfo?.[0];
+  if (!info || !/^image\//.test(info.mime || '')) { await note(); return 'none'; }
+  const img = await fetchImage(info.thumburl || info.url);
+  if (!/^image\//.test(img.contentType || '')) throw new Error(`not an image (${img.contentType})`);
+  if (img.data.length > PHOTO_MAX_BYTES) throw new Error(`too large (${img.data.length} bytes)`);
+  await db.runAsync(
+    `INSERT INTO league_season_logos (season_id, file, content_type, data, checked_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(season_id) DO UPDATE SET file=excluded.file, content_type=excluded.content_type, data=excluded.data, checked_at=excluded.checked_at`,
+    [seasonId, file, img.contentType, img.data, checkedAt]);
+  return 'downloaded';
+}
+
 /**
  * Sync one season. Returns a summary for logging. `now` (ms) is injectable for tests.
  */
@@ -376,6 +408,11 @@ async function syncSeason(cfg, opts = {}) {
   }
 
   await syncTeamLogos(season.id, fetchImage, imageGapMs);
+  try {
+    await syncSeasonLogo(season.id, cfg.page, { query: opts.query, fetchImage, apiGapMs: opts.apiGapMs, now });
+  } catch (e) {
+    console.error(`[leagues] season logo for ${cfg.slug} failed: ${e.message}`);
+  }
   let photos = null;
   try {
     photos = await syncPlayerPhotos(season.id, { query: opts.query, fetchImage, apiGapMs: opts.apiGapMs, imageGapMs, now });
@@ -389,7 +426,11 @@ async function syncAllLeagues(opts = {}) {
   const now = opts.now ?? Date.now();
   const doneBefore = new Date(now - FINISHED_AFTER_DAYS * 86400000).toISOString().slice(0, 10);
   const results = [];
+  // activeOnly: the quick match-day pass - just the seasons with a match live
+  // or on today, so live scores and results land within minutes, not hours.
+  const active = opts.activeOnly ? new Set(await markets.activeSeasonSlugs(now)) : null;
   for (const cfg of opts.seasons || LEAGUE_SEASONS) {
+    if (active && !active.has(cfg.slug)) continue;
     const s = await db.getAsync('SELECT end_date, synced_at FROM league_seasons WHERE slug = ?', [cfg.slug]);
     const open = s && await db.getAsync(
       `SELECT 1 FROM league_markets lm JOIN league_matches m ON m.id = lm.match_id JOIN league_seasons ls ON ls.id = m.season_id
@@ -407,7 +448,7 @@ async function syncAllLeagues(opts = {}) {
   return results;
 }
 
-module.exports = { syncSeason, syncAllLeagues, lockAtFor, syncPlayerPhotos, infoboxImage, infoboxStartgg, shrinkToSquare };
+module.exports = { syncSeason, syncAllLeagues, lockAtFor, syncPlayerPhotos, syncSeasonLogo, infoboxImage, infoboxStartgg, shrinkToSquare };
 
 if (require.main === module) {
   syncAllLeagues().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
